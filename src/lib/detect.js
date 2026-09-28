@@ -5,7 +5,15 @@
 
   const SPACE = '[ \\u00a0\\u202f\\u2009\\u2007]'; // space, nbsp, narrow/thin nbsp
   // A number with optional grouping and decimals: 1299, 1,299.00, 1.299,00, 1 299,00
-  const NUM = `\\d{1,3}(?:[.,\\u00a0\\u202f\\u2009 ]\\d{3})*(?:[.,]\\d{1,4})?|\\d+(?:[.,]\\d{1,4})?`;
+  // Longest alternative first:
+  //   1,23,456   Indian lakh grouping (pairs, then a triple)
+  //   1'299.00   Swiss apostrophe grouping
+  //   1.299,00 / 1 299,00 / 1,299.00 / 1299
+  const GROUP = "[.,\\u00a0\\u202f\\u2009 '\\u2019]";
+  const NUM =
+    `\\d{1,2}(?:,\\d{2})+,\\d{3}(?:\\.\\d{1,4})?` +
+    `|\\d{1,3}(?:${GROUP}\\d{3})*(?:[.,]\\d{1,4})?` +
+    `|\\d+(?:[.,]\\d{1,4})?`;
 
   const LENGTH_UNITS = {
     mm: 1, millimeter: 1, millimeters: 1, millimetre: 1, millimetres: 1,
@@ -19,6 +27,17 @@
     .sort((a, b) => b.length - a.length)
     .map(esc)
     .join('|');
+
+  // Bare "in" is a preposition far more often than it is a unit. "34 in inseam"
+  // is a measurement; "12 in the manual" and "1 in 4 people" are not. Only the
+  // two-letter spelling is ambiguous — inch/inches/" are always units.
+  const IN_IS_PROSE = new RegExp(
+    '^\\.?\\s+(?:the|a|an|this|that|these|those|my|our|your|their|his|her|its|' +
+      'stock|store|total|addition|fact|case|order|place|time|use|which|all|any|each|every|both|' +
+      'advance|between|front|person|people|line|charge|progress|question|full|part|two|three|four|' +
+      'five|six|seven|eight|nine|ten|\\d)\\b',
+    'i'
+  );
 
   function esc(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -42,12 +61,22 @@
   let MONEY_POST = null;
   let CODE_RE = null;
 
-  function buildMoneyRegexes() {
-    const symbols = Object.keys(UB.SYMBOLS)
-      .concat(Object.keys(UB.AMBIGUOUS))
+  // A letter-based symbol needs a boundary, or "Rs" matches inside "ARS" and
+  // "kr" inside "PKR" — both of which used to resolve to the wrong currency.
+  function symbolAlternation(list) {
+    return list
       .sort((a, b) => b.length - a.length)
-      .map(esc)
+      .map((sym) => {
+        let re = esc(sym);
+        if (/^[A-Za-z]/.test(sym)) re = `(?<![A-Za-z])${re}`;
+        if (/[A-Za-z]$/.test(sym)) re = `${re}(?![A-Za-z])`;
+        return re;
+      })
       .join('|');
+  }
+
+  function buildMoneyRegexes() {
+    const symbols = symbolAlternation(Object.keys(UB.SYMBOLS).concat(Object.keys(UB.AMBIGUOUS)));
     MONEY_PRE = new RegExp(`(${symbols})${SPACE}*(${NUM})(?![\\d])`, 'gi');
     MONEY_POST = new RegExp(`(?<![\\w.,])(${NUM})${SPACE}*(${symbols})(?![\\w])`, 'gi');
     const codes = Object.keys(UB.CURRENCIES).join('|');
@@ -144,6 +173,7 @@
     while ((m = LENGTH.exec(text))) {
       if (m[2] === 'M') continue; // "5 M in seed funding" is not 5 metres
       const unit = m[2].toLowerCase();
+      if (unit === 'in' && IN_IS_PROSE.test(text.slice(m.index + m[0].length))) continue;
       const factor = LENGTH_UNITS[unit] ?? LENGTH_UNITS[m[2]];
       const value = parseNumber(m[1]);
       if (!factor || value == null || value === 0) continue;

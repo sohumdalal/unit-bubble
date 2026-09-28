@@ -126,8 +126,8 @@
     kronaMeans: 'SEK',
     underline: false, // the chip is the marking now
     disabledHosts: [],
-    // Your own best-fitting garment, measured flat, in cm. Used only to
-    // highlight a row in the size-chart panel.
-    measurementsCm: { chest: '', shoulders: '', waist: '', hips: '' },
+    // Your own best-fitting garments, measured flat, in cm, per garment type.
+    // Used only by the size-chart panel. See src/lib/fit.js for the fields.
+    profiles: { tops: {}, jackets: {}, pants: {} },
   };
 })(typeof self !== 'undefined' ? self : globalThis);

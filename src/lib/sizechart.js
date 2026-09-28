@@ -161,9 +161,13 @@
     ['shoulders', /shoulder|épaule|epaule|schulter|hombro|spalle|axel/i],
     ['waist', /waist|taille|bund|cintura|vita|midja/i],
     ['hips', /hip|hanche|hüfte|cadera|fianchi/i],
-    ['length', /length|back|longueur|länge|largo|lunghezza|hem/i],
     ['sleeve', /sleeve|manche|ärmel|manga|manica/i],
     ['inseam', /inseam|inside leg|entrejambe|schritt/i],
+    ['neck', /neck|collar|kragen|cuello|colletto|encolure/i],
+    ['thigh', /thigh|cuisse|oberschenkel|muslo|coscia/i],
+    ['rise', /rise|montant|schritthöhe|tiro/i],
+    ['legOpening', /leg opening|hem width|cuff|opening|bas de jambe|ourlet/i],
+    ['length', /length|back|longueur|länge|largo|lunghezza|hem/i],
   ];
 
   function columnRole(header) {
@@ -173,10 +177,10 @@
 
   // Smallest row whose value for that column is at least the wearer's own
   // measurement — how you actually pick a size off a flat-measurement chart.
-  function pickSize(grid, measurements) {
+  function pickSize(grid, measurements, priority) {
     if (!grid || !measurements) return null;
     const roles = (grid.headers || []).map(columnRole);
-    for (const role of ['chest', 'shoulders', 'waist', 'hips']) {
+    for (const role of priority && priority.length ? priority : ['chest', 'shoulders', 'waist', 'hips']) {
       const col = roles.indexOf(role);
       const want = measurements[role];
       if (col === -1 || !want) continue;

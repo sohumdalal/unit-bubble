@@ -4,8 +4,7 @@ A Chrome extension for shopping on sites that don't use your units. Every price
 and measurement on the page carries a chip with the converted value, right where
 you're already looking — `€65.00 EUR $74.00`, `63.5 cm 25.0″`. The chip is a
 bright blue pill in its own type stack, so it never reads as part of the store's
-own copy, and the pointer over it is a two-way convert arrow rather than the
-browser's `help` cursor. Hover one for the original and the rate behind it.
+own copy. Hover one for the original and the rate behind it.
 
 Size charts get their own treatment: the whole chart is re-rendered in a floating
 panel in your units, with a toggle back to the original.
@@ -71,11 +70,35 @@ chart's columns are monotonic**: every column climbs (or falls) as you go down
 the sizes. At least 60% of columns must hold that, alongside a minimum of 3 rows,
 2 columns, and 55% of slots filled.
 
-Fill in your own measurements under Settings — measured flat, off a garment that
-already fits — and the panel highlights the first row that isn't smaller than
-you, which is how a flat-measurement chart is meant to be read. The panel is
-draggable by its header, the ✕ collapses it to a pill, and the unit toggle flips
-the whole chart at once.
+A chart that only exists in the DOM until a modal opens has no rectangles to
+cluster while it is hidden, and opening the modal adds no new text — it only
+flips visibility. So detection is re-armed by visibility (an
+`IntersectionObserver` on values that measured zero) and by attribute changes,
+not by mutation alone.
+
+The panel is draggable by its header, the ✕ collapses it to a pill, and the unit
+toggle flips the whole chart at once.
+
+### Fit
+
+Measurements live per garment type — `tops`, `jackets`, `pants` — because a
+chest that's right for a tee is wrong for a jacket you layer under. Fields and
+thresholds are in `src/lib/fit.js`; which profile a chart uses is inferred from
+its own columns first (an inseam column means pants), then the page's words, and
+can be switched in the panel's footer.
+
+With a profile filled in, the panel highlights the first row that isn't smaller
+than you — how a flat-measurement chart is meant to be read — and **hovering any
+cell** gives the difference from your own measurement plus what it means to
+wear: `+1.6″ vs your 22.0″ · boxy`. Thresholds are per family, since a shoulder
+seam 1″ out is a different problem from a sleeve 1″ out:
+
+| Family | Fields | Reads as |
+| --- | --- | --- |
+| girth | chest, waist, hips, thigh | too tight · snug · spot on · roomy · boxy |
+| width | shoulders, leg opening | too narrow · slightly narrow · spot on · wide · dropped shoulder |
+| length | sleeve, body length, inseam, rise | too short · a touch short · spot on · a touch long · too long |
+| neck | neck | too tight · snug · spot on · loose · very loose |
 
 ## What it detects
 
@@ -84,11 +107,13 @@ the whole chart at once.
 - **Prices** — symbol before or after the number (`€19,99`, `1 495 kr`,
   `zł129`), prefixed dollar and yen variants (`US$`, `C$`, `R$`, `CN¥`), and ISO
   codes on either side (`1.299,00 EUR`, `CHF 48.20`).
-- **Both number formats** — `1,299.00` and `1.299,00` and `1 299`, resolved by
-  separator position, with the currency as a tiebreaker on the genuinely
+- **Every number format** — `1,299.00`, `1.299,00`, `1 299,00` (plain, nbsp and
+  narrow nbsp), Swiss `1'299.00`, and Indian lakh grouping `1,23,456`. Resolved
+  by separator position, with the currency as a tiebreaker on the genuinely
   ambiguous `1.299`.
 
-Deliberately skipped: uppercase `M` (million, not metres), `290 GSM`, years
+Deliberately skipped: uppercase `M` (million, not metres), bare `in` as a
+preposition (`12 in the manual`, `1 in 4 people`), `290 GSM`, years
 (`BRUT 2026`), decade apostrophes (`LOOKBOOK '26`), `in` inside words,
 inputs, textareas and `contenteditable`, and anything already in your units.
 
@@ -108,14 +133,17 @@ src/lib/currencies.js  currency tables, symbol maps, fallback rates, defaults
 src/lib/detect.js      number parsing + match finding (pure, node-testable)
 src/lib/convert.js     match + settings -> the two lines of bubble text
 src/lib/sizechart.js   geometric chart reader: rects -> grid, labels, size pick
+src/lib/fit.js         garment profiles, fit verdicts, profile detection
 src/panel.js           the size-chart panel (shadow DOM, draggable, unit toggle)
 src/content.js         text walker, inline chips, chart wiring, the hover bubble
 src/background.js      rate fetch, cache, alarm, message handler
 src/popup.*            toolbar popup
 src/options.*          settings page
-test/detect.test.js    39 assertions on detection and conversion
-test/sizechart.test.js 31 assertions on grid reconstruction, fed browser rects
-test/fixtures.html     real-world strings plus three differently-built charts
+test/detect.test.js     43 assertions on detection and conversion
+test/units.test.js      238 assertions: every unit spelling, every magnitude
+test/currencies.test.js 545 assertions: every code, symbol and locale format
+test/sizechart.test.js  31 assertions on grid reconstruction, fed browser rects
+test/fixtures.html      real-world strings plus three differently-built charts
 tools/make-icons.js    regenerates icons/*.png
 ```
 

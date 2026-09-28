@@ -21,6 +21,7 @@
         "src/lib/detect.js",
         "src/lib/convert.js",
         "src/lib/sizechart.js",
+        "src/lib/fit.js",
         "src/panel.js",
         "src/content.js"
       ],

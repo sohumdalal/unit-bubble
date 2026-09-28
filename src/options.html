@@ -12,6 +12,10 @@
   h2 { margin: 0; font-size: 11px; font-weight: 590; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 14px; }
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .fields .lbl { white-space: nowrap; }
+  .fields input::placeholder { font-size: 11px; }
+  code { font-size: 11.5px; background: var(--panel); padding: 1px 4px; border-radius: 4px; }
   .triple { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
   .card select, .card input, .card textarea { background: var(--bg); }
   .saved { color: var(--accent); font-size: 11px; opacity: 0; transition: opacity .2s ease; }
@@ -64,19 +68,11 @@
 
   <section>
     <h2>Your measurements <span class="muted" style="text-transform:none;letter-spacing:0">— optional</span></h2>
-    <div class="card">
-      <p class="muted" style="margin:0">Size charts list garments measured flat. Measure a garment that already
-        fits you the same way and the panel will highlight the matching row. Type
-        <code>56</code> for <span id="unit-word">inches</span>, or <code>56cm</code> to be explicit.</p>
-      <div class="pair">
-        <label class="field"><span class="lbl">Chest</span><input type="text" id="m-chest" inputmode="decimal" placeholder="e.g. 22" /></label>
-        <label class="field"><span class="lbl">Shoulders</span><input type="text" id="m-shoulders" inputmode="decimal" placeholder="e.g. 18.5" /></label>
-      </div>
-      <div class="pair">
-        <label class="field"><span class="lbl">Waist</span><input type="text" id="m-waist" inputmode="decimal" placeholder="optional" /></label>
-        <label class="field"><span class="lbl">Hips</span><input type="text" id="m-hips" inputmode="decimal" placeholder="optional" /></label>
-      </div>
-    </div>
+    <p class="muted" style="margin:-6px 0 0">Size charts list garments measured flat. Measure something you already
+      own that fits the way you want, the same way, and the panel will highlight the matching row and tell you how
+      each size differs. Kept per garment type, since a chest that's right for a tee is wrong for a jacket you
+      layer under. Type <code>22</code> for <span id="unit-word">inches</span>, or <code>56cm</code> to be explicit.</p>
+    <div id="profiles"></div>
   </section>
 
   <section>
@@ -116,4 +112,6 @@
 <script src="lib/currencies.js"></script>
 <script src="lib/detect.js"></script>
 <script src="lib/convert.js"></script>
+<script src="lib/sizechart.js"></script>
+<script src="lib/fit.js"></script>
 <script src="options.js"></script>

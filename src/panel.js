@@ -90,7 +90,36 @@
       .foot, .foot a { color: rgba(245,245,247,.45); }
       .foot a { color: #7ab8ff; }
     }
-    @media (prefers-reduced-motion: reduce) { .wrap { transition: none; } }
+    .foot select {
+      font: 400 11.5px/1 ${FONT}; color: inherit; cursor: pointer;
+      background: rgba(0,0,0,.05); border: 1px solid rgba(0,0,0,.1);
+      border-radius: 7px; padding: 5px 7px; max-width: 150px;
+    }
+    td[data-role] { cursor: default; }
+    td[data-role]:hover { background: rgba(0,122,255,.07); }
+    .tip {
+      position: fixed; z-index: 2147483647; pointer-events: none;
+      padding: 7px 10px 8px; border-radius: 10px; white-space: nowrap;
+      font: 400 11.5px/1.4 ${FONT};
+      background: #101013; color: #fff;
+      box-shadow: 0 2px 6px rgba(0,0,0,.2), 0 12px 32px -10px rgba(0,0,0,.55);
+      opacity: 0; transform: translateY(3px); transition: opacity .1s ease, transform .12s ease;
+    }
+    .tip.in { opacity: 1; transform: none; }
+    .tip b { display: block; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .tip span { color: rgba(255,255,255,.55); font-variant-numeric: tabular-nums; }
+    .tip i { display: block; margin-top: 3px; font-style: normal; font-weight: 500; }
+    .tip[data-tone="good"] i { color: #30d158; }
+    .tip[data-tone="snug"] i { color: #ffd60a; }
+    .tip[data-tone="tight"] i { color: #ff453a; }
+    .tip[data-tone="relaxed"] i { color: #64d2ff; }
+    .tip[data-tone="boxy"] i { color: #da8fff; }
+    @media (prefers-color-scheme: dark) {
+      .foot select { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.12); }
+      .tip { background: #2c2c2e; }
+      td[data-role]:hover { background: rgba(10,132,255,.12); }
+    }
+    @media (prefers-reduced-motion: reduce) { .wrap, .tip { transition: none; } }
   `;
 
   let host = null;
@@ -112,6 +141,7 @@
   function clear() {
     if (!shadow) return;
     for (const el of [...shadow.children]) if (el.tagName !== 'STYLE') el.remove();
+    tip = null;
   }
 
   const IMPERIAL = new Set(['in', 'ft', 'ftin']);
@@ -167,7 +197,9 @@
           return `<tr${picked}><td class="size">${escape(grid.rowLabels[r] || '·')}</td>${row
             .map((item, c) => {
               const hit = chart.pick && chart.pick.row === r && chart.pick.col === c ? ' class="hit"' : '';
-              return `<td${hit}>${escape(cellText(item, unit))}</td>`;
+              const role = chart.roles && chart.roles[c];
+              const cmp = item && role && chart.values && chart.values[role] ? ` data-role="${role}" data-mm="${item.mm}"` : '';
+              return `<td${hit}${cmp}>${escape(cellText(item, unit))}</td>`;
             })
             .join('')}</tr>`;
         })
@@ -176,14 +208,18 @@
 
     const foot = document.createElement('div');
     foot.className = 'foot';
-    if (chart.pick) {
-      const over = chart.pick.over ? 'largest listed' : 'best fit';
-      foot.innerHTML = `<span>Your ${chart.pick.role} → <strong>${escape(
-        chart.pick.label
-      )}</strong> · ${over}</span><a href="#" data-act="settings">edit</a>`;
-    } else {
-      foot.innerHTML = `<span>Converted from this page's chart</span><a href="#" data-act="settings">add your measurements</a>`;
-    }
+    const options = UB.fit.PROFILES.map(
+      (p) => `<option value="${p.id}"${p.id === chart.profileId ? ' selected' : ''}>${escape(p.short)}</option>`
+    ).join('');
+    const hasValues = chart.values && Object.keys(chart.values).length;
+    const summary = chart.pick
+      ? `Your ${UB.fit.FIELDS[chart.pick.role].label.toLowerCase()} → <strong>${escape(chart.pick.label)}</strong>${
+          chart.pick.over ? ' · largest listed' : ''
+        }`
+      : hasValues
+      ? 'No matching column on this chart'
+      : '<a href="#" data-act="settings">Add your measurements</a>';
+    foot.innerHTML = `<span>${summary}</span><select class="prof" title="Compare against">${options}</select>`;
 
     wrap.append(head, body, foot);
     shadow.append(wrap);
@@ -199,10 +235,18 @@
       state.collapsed = true;
       render();
     };
-    foot.querySelector('[data-act=settings]').onclick = (e) => {
-      e.preventDefault();
-      chrome.runtime.sendMessage({ type: 'openOptions' });
+    const settingsLink = foot.querySelector('[data-act=settings]');
+    if (settingsLink) {
+      settingsLink.onclick = (e) => {
+        e.preventDefault();
+        chrome.runtime.sendMessage({ type: 'openOptions' });
+      };
+    }
+    foot.querySelector('.prof').onchange = (e) => {
+      chart.setProfile(e.target.value);
+      render();
     };
+    wireTips(body, table);
     makeDraggable(wrap, head);
 
     if (state.collapsed) {
@@ -216,6 +260,59 @@
       };
       shadow.append(pill);
     }
+  }
+
+  // Hovering a cell answers the question the chart doesn't: how far off your own
+  // measurement is this size, and what does that feel like when worn.
+  let tip = null;
+
+  function wireTips(body, table) {
+    table.addEventListener('mouseover', (e) => {
+      const td = e.target.closest && e.target.closest('td[data-role]');
+      if (!td) return;
+      const { chart, unit } = state;
+      const role = td.dataset.role;
+      const mine = chart.values[role];
+      const diff = Number(td.dataset.mm) - mine;
+      const v = UB.fit.verdict(role, diff);
+      const shown = unit === 'orig' ? chart.sourceUnit : unit;
+      showTip(
+        td,
+        `<b>${UB.fit.formatDiff(diff, shown)}</b><span>vs your ${
+          shown === 'in' ? `${UB.format.num(mine / 25.4, 2)}″` : `${UB.format.num(mine / 10, 1)} cm`
+        }</span>${v ? `<i>${v.text}</i>` : ''}`,
+        v && v.tone
+      );
+    });
+    table.addEventListener('mouseout', (e) => {
+      if (!e.relatedTarget || !table.contains(e.relatedTarget)) hideTip();
+    });
+    body.addEventListener('scroll', hideTip, { passive: true });
+  }
+
+  function showTip(td, html, tone) {
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.className = 'tip';
+      shadow.append(tip);
+    }
+    tip.innerHTML = html;
+    if (tone) tip.dataset.tone = tone;
+    else delete tip.dataset.tone;
+    const r = td.getBoundingClientRect();
+    tip.style.visibility = 'hidden';
+    tip.classList.add('in');
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    let top = r.top - h - 7;
+    if (top < 6) top = r.bottom + 7;
+    tip.style.top = `${Math.round(top)}px`;
+    tip.style.left = `${Math.round(Math.max(6, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 6)))}px`;
+    tip.style.visibility = 'visible';
+  }
+
+  function hideTip() {
+    if (tip) tip.classList.remove('in');
   }
 
   function makeDraggable(wrap, handle) {

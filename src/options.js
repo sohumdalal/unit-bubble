@@ -4,40 +4,90 @@ let settings = { ...D };
 let rates = { ...UB.FALLBACK_RATES };
 
 const FIELDS = ['length', 'currency', 'dollarMeans', 'yenMeans', 'kronaMeans'];
-const ROLES = ['chest', 'shoulders', 'waist', 'hips'];
 const unitWord = () => (settings.length === 'in' ? 'inches' : 'centimeters');
 
-function showMeasurements() {
-  $('unit-word').textContent = unitWord();
-  for (const role of ROLES) {
-    const cm = (settings.measurementsCm || {})[role];
-    $(`m-${role}`).value = cm ? UB.format.num(settings.length === 'in' ? cm / 2.54 : Number(cm), 1) : '';
+// One card per garment type, fields from src/lib/fit.js.
+function buildProfiles() {
+  const host = $('profiles');
+  host.innerHTML = UB.fit.PROFILES.map(
+    (p) => `
+      <div class="card" style="margin-top:12px">
+        <div class="row between">
+          <strong style="font-weight:500">${p.label}</strong>
+          <span class="muted" id="sum-${p.id}"></span>
+        </div>
+        <div class="fields">
+          ${p.fields
+            .map(
+              (role) => `
+            <label class="field">
+              <span class="lbl">${UB.fit.FIELDS[role].label}</span>
+              <input type="text" inputmode="decimal" data-profile="${p.id}" data-role="${role}"
+                     placeholder="${UB.fit.FIELDS[role].hint}" />
+            </label>`
+            )
+            .join('')}
+        </div>
+      </div>`
+  ).join('');
+
+  for (const input of host.querySelectorAll('input')) {
+    input.onchange = (e) => saveMeasurement(e.target.dataset.profile, e.target.dataset.role, e.target.value);
   }
 }
 
-function currencyOptions(codes) {
-  return codes.map((c) => `<option value="${c}">${c} — ${UB.CURRENCIES[c]}</option>`).join('');
+function showMeasurements() {
+  $('unit-word').textContent = unitWord();
+  const inches = settings.length === 'in';
+  for (const input of document.querySelectorAll('#profiles input')) {
+    const cm = Number((settings.profiles || {})[input.dataset.profile]?.[input.dataset.role]);
+    input.value = cm > 0 ? UB.format.num(inches ? cm / 2.54 : cm, 1) : '';
+  }
+  for (const p of UB.fit.PROFILES) {
+    const filled = Object.values((settings.profiles || {})[p.id] || {}).filter((v) => Number(v) > 0).length;
+    $(`sum-${p.id}`).textContent = filled ? `${filled} of ${p.fields.length} set` : 'not set';
+  }
 }
 
-function fillSelects() {
-  $('currency').innerHTML = currencyOptions(Object.keys(UB.CURRENCIES));
-  $('dollarMeans').innerHTML = currencyOptions(UB.AMBIGUOUS['$'].options);
-  $('yenMeans').innerHTML = currencyOptions(UB.AMBIGUOUS['¥'].options);
-  $('kronaMeans').innerHTML = currencyOptions(UB.AMBIGUOUS.kr.options);
+// Accepts "56", "56cm", '22"', "1m82" — a bare number means whichever unit the
+// user reads in. Always stored as cm.
+function parseMeasurement(raw) {
+  const text = String(raw).trim();
+  if (!text) return '';
+  const bare = /^\d+(?:[.,]\d+)?$/.test(text);
+  const probe = bare ? `${text} ${settings.length === 'in' ? 'in' : 'cm'}` : text;
+  const match = UB.detect.findMatches(probe, settings)[0];
+  if (!match || match.kind !== 'length') return null;
+  return Math.round(match.mm) / 10;
 }
 
-function preview() {
-  const sample = settings.length === 'in' ? '63.5 cm' : '25 in';
-  const lenMatch = UB.detect.findMatches(sample, settings)[0];
-  const lenConv = lenMatch && UB.convert(lenMatch, settings, rates);
-  $('pv-len').textContent = lenConv ? `${sample} → ${lenConv.primary}` : sample;
+function saveMeasurement(profileId, role, raw) {
+  const cm = parseMeasurement(raw);
+  if (cm === null) return showMeasurements(); // unparseable: put the stored value back
+  const profiles = { ...(settings.profiles || {}) };
+  profiles[profileId] = { ...(profiles[profileId] || {}), [role]: cm };
+  save({ profiles });
+  showMeasurements();
+}
 
-  const from = settings.currency === 'EUR' ? 'USD' : 'EUR';
-  const moneyMatch = { kind: 'money', code: from, value: 49.99 };
-  const moneyConv = UB.convert(moneyMatch, settings, rates);
-  $('pv-cur').textContent = moneyConv
-    ? `${UB.format.money(49.99, from)} → ${moneyConv.primary}`
-    : UB.format.money(49.99, from);
+// One-time move from the flat pre-profile measurements.
+function migrate() {
+  const old = settings.measurementsCm;
+  if (!old || settings.profiles === undefined) return;
+  const used = Object.values(settings.profiles || {}).some((p) => Object.keys(p || {}).length);
+  if (used) return;
+  const profiles = { tops: {}, jackets: {}, pants: {} };
+  let moved = false;
+  for (const [role, cm] of Object.entries(old)) {
+    if (!Number(cm)) continue;
+    moved = true;
+    if (role === 'waist' || role === 'hips') profiles.pants[role] = Number(cm);
+    else {
+      profiles.tops[role] = Number(cm);
+      profiles.jackets[role] = Number(cm);
+    }
+  }
+  if (moved) save({ profiles });
 }
 
 let savedTimer;
@@ -103,8 +153,9 @@ async function init() {
     $(id).checked = !!settings[id];
     $(id).onchange = (e) => save({ [id]: e.target.checked });
   }
+  buildProfiles();
+  migrate();
   showMeasurements();
-  for (const role of ROLES) $(`m-${role}`).onchange = (e) => saveMeasurement(role, e.target.value);
 
   $('disabledHosts').value = (settings.disabledHosts || []).join('\n');
   $('disabledHosts').onchange = (e) =>

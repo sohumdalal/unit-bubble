@@ -294,13 +294,51 @@
       .sort((a, b) => a.depth - b.depth || b.items.length - a.items.length);
   }
 
+  // A chart inside a modal or a collapsed panel is in the DOM long before it is
+  // shown, and a hidden element has no rect to cluster. Opening the modal adds
+  // no new text — it only flips visibility — so detection has to be re-armed by
+  // visibility, not by mutation.
+  let visibilityWatcher = null;
+  let recheckTimer = null;
+
+  function watchForVisible(el) {
+    if (!visibilityWatcher) {
+      visibilityWatcher = new IntersectionObserver((entries) => {
+        let woke = false;
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          visibilityWatcher.unobserve(entry.target);
+          woke = true;
+        }
+        if (!woke) return;
+        clearTimeout(recheckTimer);
+        recheckTimer = setTimeout(() => detectCharts(), 120);
+      });
+    }
+    visibilityWatcher.observe(el);
+  }
+
+  function pageSignal() {
+    const parts = [document.title];
+    const h1 = document.querySelector('h1');
+    if (h1) parts.push(h1.textContent);
+    for (const el of document.querySelectorAll('[class*=breadcrumb] a,[class*=product-type],[itemprop=category]')) {
+      parts.push(el.textContent);
+    }
+    return parts.join(' ').slice(0, 400);
+  }
+
   function detectCharts() {
     const hits = [];
     for (const el of document.querySelectorAll('.ub-hit[data-ub-kind="length"]')) {
       if (el.closest('[data-ub-chart]')) continue;
       const data = readMatch(el);
       const rect = originalRect(el);
-      if (!data || !rect || (!rect.width && !rect.height)) continue;
+      if (!data) continue;
+      if (!rect || (!rect.width && !rect.height)) {
+        watchForVisible(el); // hidden for now; try again when it is shown
+        continue;
+      }
       hits.push({ el, mm: data.mm, unit: data.unit, text: data.text, rect });
     }
     if (hits.length < MIN_CHART_HITS) return;
@@ -317,21 +355,26 @@
       if (sourceImperial === (settings.length === 'in')) continue;
 
       UB.chart.attachLabels(grid, labelCandidates(cand.el));
-      const measurements = {};
-      for (const [role, cm] of Object.entries(settings.measurementsCm || {})) {
-        if (cm) measurements[role] = Number(cm) * 10;
-      }
 
       const chart = {
         key: `${cand.depth}:${grid.cells.length}x${grid.colBands.length}:${grid.cells[0]
           .map((c) => c && Math.round(c.mm))
           .join(',')}`,
         grid,
+        roles: (grid.headers || []).map(UB.chart.columnRole),
         sourceUnit: sourceImperial ? 'in' : 'cm',
         targetUnit: settings.length,
         labelHeader: 'Size',
-        pick: UB.chart.pickSize(grid, measurements),
       };
+      // Which set of measurements this chart is compared against. Inferred from
+      // the chart's own columns and the page's words, switchable in the panel.
+      chart.setProfile = (id) => {
+        chart.profileId = id;
+        chart.values = UB.fit.valuesFor(settings, id);
+        chart.pick = UB.chart.pickSize(grid, chart.values, UB.fit.profile(id).primary);
+        return chart;
+      };
+      chart.setProfile(UB.fit.detectProfile(grid.headers, pageSignal()));
 
       cand.el.setAttribute('data-ub-chart', '');
       // The panel is the conversion for a chart; chips inside it would be noise.
@@ -410,20 +453,34 @@
     window.addEventListener('scroll', hideBubble, { passive: true, capture: true });
     pass(document.body);
     observer = new MutationObserver((records) => {
+      let recheck = false;
       for (const r of records) {
         if (r.target instanceof Element && r.target.closest('[data-ub-root]')) continue;
         if ((r.type === 'childList' && r.addedNodes.length) || r.type === 'characterData') return queuePass();
+        if (r.type === 'attributes') recheck = true;
+      }
+      if (recheck) {
+        clearTimeout(recheckTimer);
+        recheckTimer = setTimeout(() => detectCharts(), 150);
       }
     });
-    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'hidden', 'open', 'aria-hidden'],
+    });
   }
 
   function stop() {
     active = false;
     if (observer) observer.disconnect();
     if (chartObserver) chartObserver.disconnect();
+    if (visibilityWatcher) visibilityWatcher.disconnect();
     observer = null;
     chartObserver = null;
+    visibilityWatcher = null;
     document.removeEventListener('mouseover', onOver, true);
     document.removeEventListener('mouseout', onOut, true);
     window.removeEventListener('scroll', hideBubble, true);
