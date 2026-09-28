@@ -4,7 +4,8 @@ A Chrome extension for shopping on sites that don't use your units. Every price
 and measurement on the page carries a chip with the converted value, right where
 you're already looking — `€65.00 EUR $74.00`, `63.5 cm 25.0″`. The chip is a
 bright blue pill in its own type stack, so it never reads as part of the store's
-own copy. Hover one for the original and the rate behind it.
+own copy, and the pointer over it is a two-way convert arrow rather than the
+browser's `help` cursor. Hover one for the original and the rate behind it.
 
 Size charts get their own treatment: the whole chart is re-rendered in a floating
 panel in your units, with a toggle back to the original.
