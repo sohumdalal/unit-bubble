@@ -201,6 +201,35 @@ for (const text of [
   check(`not a trigger: ${text}`, UB.chart.looksLikeTrigger(text), false);
 }
 
+// Labels arrive decorated once a page hydrates — an accordion adds a "+", a
+// link adds a chevron — which is what made the button appear only after a
+// refresh. Normalisation keeps letters, digits and "&", and nothing else.
+for (const [text, want] of [
+  ['SIZE AND FIT +', true],
+  ['SIZE AND FIT \u2212', true], // MINUS SIGN, not a hyphen
+  ['SIZE AND FIT \u2013', true], // EN DASH
+  ['Size Guide \u203a', true],
+  ['Size guide \u2192', true],
+  ['(Size chart)', true],
+  ['Size Chart \u25be', true],
+  ['Size\u00a0Guide', true],
+  ['  size   guide  ', true],
+  ['Gr\u00f6\u00dfentabelle +', true],
+  ['guide des tailles \u00bb', true],
+  ['SIZE & FIT', true],
+  ['Size Guide.', true],
+  ['Size', false],
+  ['Select size', false],
+  ['Sizes 36-46 available', false],
+  ['+', false],
+  ['\u2192', false],
+]) {
+  check(`decorated label: ${JSON.stringify(text)}`, UB.chart.looksLikeTrigger(text), want);
+}
+check('normalize strips decoration', UB.chart.normalizeLabel('SIZE AND FIT +'), 'SIZE AND FIT');
+check('normalize keeps ampersand', UB.chart.normalizeLabel('Size & Fit ›'), 'Size & Fit');
+check('normalize collapses nbsp', UB.chart.normalizeLabel('Size\u00a0\u00a0Guide'), 'Size Guide');
+
 /* 10. Profile detection -------------------------------------------------- */
 check('inseam column means pants', UB.fit.detectProfile(['Waist', 'Inseam'], 'Corduroy'), 'pants');
 check('jacket from the page', UB.fit.detectProfile(['Chest', 'Shoulders'], 'Wool Chore Jacket'), 'jackets');

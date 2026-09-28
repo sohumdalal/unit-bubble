@@ -229,7 +229,10 @@
     for (const el of document.querySelectorAll('[data-ub-chart]')) el.removeAttribute('data-ub-chart');
     for (const el of document.querySelectorAll('.ub-cta')) el.remove();
     ctaEl = null;
-    ctaOpen = () => {};
+    ctaAnchor = null;
+    ctaMode = null;
+    ctaChart = null;
+    ctaTrigger = null;
     hideBubble();
     UB.panel.hide();
     charts.clear();
@@ -292,7 +295,6 @@
   function collectCells(root) {
     const cells = [];
     const labels = [];
-    let hidden = 0;
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const text = node.nodeValue;
@@ -310,16 +312,13 @@
       const cell = UB.chart.parseCell(text);
       const rect = rangeRect(node);
       if (!rect) {
-        if (cell) {
-          hidden += 1;
-          watchForVisible(node.parentElement);
-        }
+        if (cell) watchForVisible(node.parentElement);
         continue;
       }
       if (cell) cells.push({ ...cell, rect, node });
       else if (text.length <= 28) labels.push({ text, rect });
     }
-    return { cells, labels, hidden };
+    return { cells, labels };
   }
 
   // Ancestors holding enough numeric cells to be a chart, tightest first: depth
@@ -367,9 +366,8 @@
   function detectCharts() {
     if (!active) return;
     dropDeadCharts();
-    const { cells, labels, hidden } = collectCells(document.body);
-    attachPendingCta(hidden);
-    if (cells.length < 6) return;
+    const { cells, labels } = collectCells(document.body);
+    if (cells.length < 6) return refreshCta();
 
     const accepted = [];
     for (const cand of candidates(cells)) {
@@ -430,9 +428,11 @@
       }
       charts.set(cand.el, chart);
       accepted.push(cand.el);
-      attachChartCta(chart, cand.el);
+      ctaChart = chart;
       watchChart(cand.el);
     }
+
+    refreshCta();
   }
 
   // Opening is driven by the chart coming into view. Closing is not: the panel
@@ -463,103 +463,123 @@
     for (const [el, chart] of charts) {
       if (el.isConnected) continue;
       charts.delete(el);
+      if (ctaChart === chart) ctaChart = null;
       if (UB.panel.current() === chart.key) UB.panel.hide();
     }
   }
 
-  // Signalling that a chart is there. One button, placed beside the store's own
-  // size-guide link where there is one — that is where you look for it — and
-  // above the chart itself otherwise. What it opens changes as we learn more:
-  // before the chart is readable it opens the store's guide, and once we have
-  // parsed the chart it opens the panel directly.
+  // Signalling that a chart is there.
+  //
+  // One button, and its behaviour is read from current state on every click
+  // rather than rebound as the extension learns things — rebinding is what let
+  // a later pass clobber it. Placement is recomputed on every pass too, so it
+  // is self-correcting: above the chart while the chart is on screen, beside
+  // the store's label otherwise.
+  const CTA_LABEL = 'Open Chart';
+
   let ctaEl = null;
-  let ctaOpen = () => {};
+  let ctaAnchor = null;
+  let ctaMode = null;
+  let ctaChart = null;
+  let ctaTrigger = null;
   let forceOpenUntil = 0;
 
-  function triggerElements() {
-    const out = [];
-    for (const el of document.querySelectorAll('a,button,summary,[role="button"]')) {
-      if (el.classList.contains('ub-cta') || el.closest('[data-ub-root]')) continue;
-      if (!UB.chart.looksLikeTrigger(el.textContent)) continue;
-      out.push(el);
+  // Which label is the size-guide label. Ranked rather than first-come, so the
+  // button lands in the same place on every load: an explicit "size chart" or
+  // "size guide" beats a generic "size & fit" accordion. The choice is kept for
+  // as long as that element is still in the page.
+  const TRIGGER_RANK = [
+    /chart|table|tabelle|tabella|taglie|tallas|tailles|tabel/i,
+    /guide/i,
+    /fit/i,
+    /sizing|measurement|size (info|help)/i,
+  ];
+
+  function triggerRank(el) {
+    for (const raw of [el.textContent, el.getAttribute('aria-label'), el.getAttribute('title'), el.value]) {
+      if (!raw || !UB.chart.looksLikeTrigger(raw)) continue;
+      const label = UB.chart.normalizeLabel(raw);
+      const rank = TRIGGER_RANK.findIndex((re) => re.test(label));
+      return rank === -1 ? TRIGGER_RANK.length : rank;
     }
-    return out;
+    return -1; // not a trigger
+  }
+
+  function bestTrigger() {
+    if (ctaTrigger && ctaTrigger.isConnected) return ctaTrigger;
+    let best = null;
+    let bestRank = Infinity;
+    for (const el of document.querySelectorAll('a,button,summary,[role="button"],[class*="size"]')) {
+      if (el.classList.contains('ub-cta') || el.closest('[data-ub-root]')) continue;
+      const rank = triggerRank(el);
+      if (rank === -1 || rank >= bestRank) continue;
+      best = el;
+      bestRank = rank;
+      if (rank === 0) break; // an explicit "size chart" is as good as it gets
+    }
+    ctaTrigger = best;
+    return best;
+  }
+
+  // Parsed chart in hand: open the panel. Otherwise open the store's own guide
+  // and let the pass that follows raise the panel.
+  function ctaClick() {
+    if (ctaChart && charts.has(ctaChart.el)) return UB.panel.show(ctaChart);
+    const trigger = bestTrigger();
+    if (!trigger) return;
+    forceOpenUntil = Date.now() + 2500;
+    trigger.click();
+    queueRecheck(250);
+    setTimeout(() => queueRecheck(0), 800);
   }
 
   function createCta() {
     const cta = document.createElement('button');
     cta.type = 'button';
-    cta.textContent = 'Open Chart';
+    cta.textContent = CTA_LABEL;
     cta.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      ctaOpen();
+      ctaClick();
     });
     return cta;
   }
 
-  // Put the button where the user is actually looking. When the chart itself is
-  // on screen that means above the chart — inside whatever modal it lives in,
-  // since the store's size-guide link is behind that modal and invisible. With
-  // no visible chart it goes beside the link. An existing button is moved
-  // rather than duplicated, so there is only ever one.
+  // container: the chart's element when it is on screen, otherwise null.
   function placeCta(container) {
+    const onScreen = container && container.isConnected && container.getBoundingClientRect().height > 0;
+    const anchor = onScreen ? container.closest('table,figure,section,article') || container : bestTrigger();
+    if (!anchor || !anchor.parentElement) return;
+
+    const mode = onScreen ? 'block' : 'inline';
     const cta = ctaEl && ctaEl.isConnected ? ctaEl : createCta();
-    cta.title = `Read this size chart in ${settings.length === 'in' ? 'inches' : 'centimeters'}`;
-    if (cta.isConnected && cta.getBoundingClientRect().height > 0) {
-      ctaEl = cta;
-      return true;
-    }
-
-    if (container && container.getBoundingClientRect().height > 0) {
-      const block = container.closest('table,figure,section,article') || container;
-      if (block.parentElement) {
-        cta.className = 'ub-cta ub-cta-block';
-        block.insertAdjacentElement('beforebegin', cta);
-        ctaEl = cta;
-        return true;
-      }
-    }
-
-    const trigger = triggerElements()[0];
-    if (trigger && trigger.parentElement) {
-      cta.className = 'ub-cta';
-      // After a block-level label the button would land on its own line and
-      // push the page around. Inside it, it sits on the same line as the text —
-      // "SIZE AND FIT  · Open Chart" — which is how a note should read.
-      const display = getComputedStyle(trigger).display;
-      if (/block|flex|grid|list-item|table/.test(display)) trigger.append(cta);
-      else trigger.insertAdjacentElement('afterend', cta);
-      ctaEl = cta;
-      return true;
-    }
-
-    if (!cta.isConnected) return false;
     ctaEl = cta;
-    return true;
+    cta.title = `Read this size chart in ${settings.length === 'in' ? 'inches' : 'centimeters'}`;
+    if (ctaAnchor === anchor && ctaMode === mode && cta.isConnected) return;
+
+    cta.className = mode === 'block' ? 'ub-cta ub-cta-block' : 'ub-cta';
+    if (mode === 'block') {
+      anchor.insertAdjacentElement('beforebegin', cta);
+    } else if (/block|flex|grid|list-item|table/.test(getComputedStyle(anchor).display)) {
+      // After a block-level label the button would land on its own line and
+      // push the page around. Inside it, it sits on the same line as the text.
+      anchor.append(cta);
+    } else {
+      anchor.insertAdjacentElement('afterend', cta);
+    }
+    ctaAnchor = anchor;
+    ctaMode = mode;
   }
 
-  // A chart we have parsed: the button opens the panel.
-  function attachChartCta(chart, container) {
-    ctaOpen = () => {
-      UB.panel.show(chart);
-    };
-    placeCta(container);
-  }
-
-  // A chart we can tell exists but cannot read yet, because the store keeps it
-  // hidden until its own modal opens. The button opens that modal, and the
-  // detection pass that follows brings up the panel.
-  function attachPendingCta(hiddenCells) {
-    if (hiddenCells < 6 || (ctaEl && ctaEl.isConnected)) return;
-    const trigger = triggerElements()[0];
-    if (!trigger) return;
-    ctaOpen = () => {
-      forceOpenUntil = Date.now() + 2500;
-      trigger.click();
-      queueRecheck(260);
-      setTimeout(() => queueRecheck(0), 800);
-    };
+  // Runs every pass, so the button is placed correctly no matter how late the
+  // store hydrates its size guide or how the page changes afterwards.
+  function refreshCta() {
+    for (const [el, chart] of charts) {
+      if (!el.isConnected || !el.getBoundingClientRect().height) continue;
+      ctaChart = chart;
+      placeCta(el);
+      return;
+    }
     placeCta(null);
   }
 
@@ -622,6 +642,12 @@
       }
       if (recheck) queueRecheck(150);
     });
+    for (const delay of [300, 900, 2000, 4500]) setTimeout(() => queueRecheck(0), delay);
+    window.addEventListener('load', () => queueRecheck(150), { once: true });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) queueRecheck(150);
+    });
+
     observer.observe(document.documentElement, {
       childList: true,
       subtree: true,

@@ -318,18 +318,31 @@
       'gu(?:í|i)a\\s*de\\s*tallas|tabla\\s*de\\s*tallas|' +
       'tabella\\s*(?:delle\\s*)?taglie|' +
       'storleksguide|maattabel' +
-    ')\\s*[:>»→]?\\s*$',
+    ')\\s*$',
     'i'
   );
 
+  // A store's label is rarely just its words: an accordion adds a "+" or a
+  // chevron when it hydrates, a link adds a "›". Those arrive after first paint,
+  // which is why matching raw text made the button come and go between loads.
+  function normalizeLabel(text) {
+    // Keep letters, digits and "&"; drop everything else. A strip-list always
+    // has holes — the first version missed U+2212 MINUS SIGN.
+    return String(text || '')
+      .replace(/[^\p{L}\p{N}&]+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   function looksLikeTrigger(text) {
-    const t = String(text || '').replace(/\s+/g, ' ').trim();
+    const t = normalizeLabel(text);
     return t.length > 0 && t.length <= 40 && TRIGGER.test(t);
   }
 
   UB.chart = {
     parseCell,
     looksLikeTrigger,
+    normalizeLabel,
     TRIGGER,
     buildGrid,
     attachLabels,
