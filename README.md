@@ -99,8 +99,11 @@ flips visibility. So detection is re-armed by visibility (an
 `IntersectionObserver` on values that measured zero) and by attribute changes,
 not by mutation alone.
 
-The panel is draggable by its header, the ✕ collapses it to a pill, and the unit
-toggle flips the whole chart at once.
+The panel opens centred in the viewport, because a size chart is the thing you
+went looking for — a corner is where you put something you might want later. It
+is draggable by its header (which pins it where you drop it), `Esc` or the ✕
+collapses it to a pill, and the unit toggle flips the whole chart at once. It
+hides itself when the chart scrolls out of view or the store's modal closes.
 
 ### Fit
 

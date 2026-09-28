@@ -12,23 +12,27 @@
     :host { all: initial; }
     .wrap {
       position: fixed; z-index: 2147483646;
-      right: 24px; bottom: 24px; width: 372px; max-width: calc(100vw - 32px);
-      box-sizing: border-box; border-radius: 16px; overflow: hidden;
+      left: 50%; top: 50%; width: 412px; max-width: calc(100vw - 28px);
+      box-sizing: border-box; border-radius: 18px; overflow: hidden;
       font: 400 13px/1.45 ${FONT};
       color: #101013; background: #fdfdfe;
-      border: 1px solid rgba(0,0,0,.1);
-      box-shadow: 0 2px 8px rgba(0,0,0,.07), 0 24px 56px -14px rgba(0,0,0,.4);
-      opacity: 0; transform: translateY(10px); transition: opacity .16s ease, transform .2s cubic-bezier(.2,.8,.2,1);
+      border: 1px solid rgba(0,0,0,.08);
+      box-shadow: 0 4px 14px rgba(0,0,0,.1), 0 32px 80px -18px rgba(0,0,0,.55);
+      opacity: 0; transform: translate(-50%, -50%) scale(.96);
+      transition: opacity .16s ease, transform .22s cubic-bezier(.2,.9,.25,1);
     }
-    .wrap.in { opacity: 1; transform: none; }
+    .wrap.in { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    /* Once dragged it stops being centred, so the transform has to go with it. */
+    .wrap.placed { transform: none; }
+    .wrap.placed.in { transform: none; }
     header {
       display: flex; align-items: center; gap: 9px;
-      padding: 12px 11px 12px 14px; border-bottom: 1px solid rgba(0,0,0,.08);
+      padding: 13px 12px 13px 15px; border-bottom: 1px solid rgba(0,0,0,.08);
       cursor: grab; user-select: none;
     }
     header.drag { cursor: grabbing; }
     .dot { width: 9px; height: 9px; border-radius: 50%; background: ${BLUE}; flex: 0 0 auto; }
-    h2 { margin: 0; font-size: 13px; font-weight: 500; letter-spacing: -.005em; flex: 1 1 auto; }
+    h2 { margin: 0; font-size: 13.5px; font-weight: 500; letter-spacing: -.005em; flex: 1 1 auto; }
     h2 small { font-weight: 400; color: rgba(16,16,19,.42); }
     .seg { display: flex; padding: 2px; gap: 2px; border-radius: 8px; background: rgba(0,0,0,.055); flex: 0 0 auto; }
     .seg button {
@@ -43,16 +47,16 @@
       font: 400 15px/1 ${FONT};
     }
     .x:hover { background: rgba(0,0,0,.06); color: #101013; }
-    .body { max-height: min(62vh, 520px); overflow: auto; padding: 2px 8px 8px; }
+    .body { max-height: min(60vh, 560px); overflow: auto; padding: 2px 10px 10px; }
     table { border-collapse: collapse; width: 100%; }
-    th, td { padding: 8px 9px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    th, td { padding: 9px 10px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
     th {
       position: sticky; top: 0; z-index: 1;
       font-size: 10.5px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase;
       color: rgba(16,16,19,.42); background: #fdfdfe; border-bottom: 1px solid rgba(0,0,0,.09);
     }
     th:first-child, td:first-child { text-align: left; }
-    td { font-size: 13.5px; border-bottom: 1px solid rgba(0,0,0,.055); }
+    td { font-size: 14px; border-bottom: 1px solid rgba(0,0,0,.055); }
     tr:last-child td { border-bottom: 0; }
     td.size { font-weight: 500; }
     tr.pick td { background: rgba(0,122,255,.1); }
@@ -168,10 +172,9 @@
     const wrap = document.createElement('div');
     wrap.className = 'wrap';
     if (state.pos) {
+      wrap.classList.add('placed');
       wrap.style.left = `${state.pos.left}px`;
       wrap.style.top = `${state.pos.top}px`;
-      wrap.style.right = 'auto';
-      wrap.style.bottom = 'auto';
     }
 
     const head = document.createElement('header');
@@ -327,7 +330,9 @@
         const left = Math.max(6, Math.min(ev.clientX - dx, window.innerWidth - r.width - 6));
         const top = Math.max(6, Math.min(ev.clientY - dy, window.innerHeight - r.height - 6));
         state.pos = { left, top };
-        wrap.style.cssText += `;left:${left}px;top:${top}px;right:auto;bottom:auto`;
+        wrap.classList.add('placed');
+        wrap.style.left = `${left}px`;
+        wrap.style.top = `${top}px`;
       };
       const up = () => {
         handle.classList.remove('drag');
@@ -343,6 +348,22 @@
     return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   }
 
+  let escBound = false;
+
+  function bindEsc() {
+    if (escBound) return;
+    escBound = true;
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (e.key !== 'Escape' || !state || state.collapsed) return;
+        state.collapsed = true;
+        render();
+      },
+      true
+    );
+  }
+
   function show(chart) {
     const same = state && state.chart.key === chart.key;
     state = {
@@ -351,6 +372,7 @@
       pos: same ? state.pos : null,
       collapsed: same ? state.collapsed : chart.autoOpen === false,
     };
+    bindEsc();
     render();
   }
 
