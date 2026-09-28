@@ -161,7 +161,47 @@ check('diff formats in inches', UB.fit.formatDiff(2 * 25.4, 'in'), '+2″');
 check('diff formats in cm', UB.fit.formatDiff(-15, 'cm'), '−1.5 cm');
 check('zero diff', UB.fit.formatDiff(0, 'in'), '±0″');
 
-/* 9. Profile detection --------------------------------------------------- */
+/* 9. Size-guide trigger text --------------------------------------------- */
+for (const text of [
+  'Size Guide',
+  'SIZE CHART',
+  'Size guide →',
+  'size guide:',
+  'Sizing',
+  'Size & Fit',
+  'Size and fit',
+  'Fit Guide',
+  'Measurements',
+  'Garment measurements',
+  'Size Table',
+  'Size info',
+  'Guide des tailles',
+  'Tableau des tailles',
+  'Größentabelle',
+  'Grossentabelle',
+  'Guía de tallas',
+  'Tabla de tallas',
+  'Tabella taglie',
+  'Tabella delle taglie',
+  'Storleksguide',
+]) {
+  check(`trigger: ${text}`, UB.chart.looksLikeTrigger(text), true);
+}
+for (const text of [
+  'Add to cart',
+  'Size',
+  'Select size',
+  'Medium',
+  '',
+  'Guide',
+  'Shipping & Returns',
+  'This size guide explains how we measure every garment we sell, in detail',
+  'Description',
+]) {
+  check(`not a trigger: ${text}`, UB.chart.looksLikeTrigger(text), false);
+}
+
+/* 10. Profile detection -------------------------------------------------- */
 check('inseam column means pants', UB.fit.detectProfile(['Waist', 'Inseam'], 'Corduroy'), 'pants');
 check('jacket from the page', UB.fit.detectProfile(['Chest', 'Shoulders'], 'Wool Chore Jacket'), 'jackets');
 check('tee from the page', UB.fit.detectProfile(['Chest', 'Shoulders'], 'The Best Pocket Tee'), 'tops');

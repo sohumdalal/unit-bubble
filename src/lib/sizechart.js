@@ -306,8 +306,31 @@
     return null;
   }
 
+  // The link or button a store puts on a product page to open its size guide.
+  // Matched on its own text, in the languages the rest of this file covers.
+  const TRIGGER = new RegExp(
+    '^\\s*(?:' +
+      'size\\s*(?:guide|chart|conversion|info|table)|' +
+      '(?:size|sizing)\\s*(?:&|and)\\s*fit|fit\\s*guide|sizing|size\\s*help|' +
+      'measurements?|garment\\s*measurements|' +
+      'guide\\s*des\\s*tailles|tableau\\s*des\\s*tailles|' +
+      'gr(?:ö|oe|o)(?:ß|ss)entabelle|gr(?:ö|oe|o)(?:ß|ss)en|' +
+      'gu(?:í|i)a\\s*de\\s*tallas|tabla\\s*de\\s*tallas|' +
+      'tabella\\s*(?:delle\\s*)?taglie|' +
+      'storleksguide|maattabel' +
+    ')\\s*[:>»→]?\\s*$',
+    'i'
+  );
+
+  function looksLikeTrigger(text) {
+    const t = String(text || '').replace(/\s+/g, ' ').trim();
+    return t.length > 0 && t.length <= 40 && TRIGGER.test(t);
+  }
+
   UB.chart = {
     parseCell,
+    looksLikeTrigger,
+    TRIGGER,
     buildGrid,
     attachLabels,
     orient,

@@ -156,19 +156,27 @@
       const style = document.createElement('style');
       style.textContent = CSS;
       shadow.append(style);
+
+      // A centred panel sits outside the store's modal in the DOM, so without
+      // this every click on our own toggle reads as a click-outside to the
+      // store and dismisses its size guide underneath us.
+      for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'touchstart', 'touchend']) {
+        host.addEventListener(type, (e) => e.stopPropagation());
+      }
     }
 
     const parent = layerParent();
-    // Re-append even when the parent is unchanged: a store that injects nodes
-    // after us would otherwise win the equal-z-index tie on DOM order.
-    if (host.parentNode !== parent || host.nextSibling) parent.appendChild(host);
+    if (host.parentNode !== parent) parent.appendChild(host);
 
     if (typeof host.showPopover === 'function') {
       if (!host.hasAttribute('popover')) host.setAttribute('popover', 'manual');
-      try {
-        host.showPopover();
-      } catch {
-        /* already open, or the parent won't allow it: z-index still applies */
+      const open = host.matches && host.matches(':popover-open');
+      if (!open) {
+        try {
+          host.showPopover();
+        } catch {
+          /* the parent won't allow it: z-index and DOM order still apply */
+        }
       }
     }
   }
@@ -405,6 +413,21 @@
     };
     bindEsc();
     render();
+    // Opening is the moment to win the equal-z-index tie on DOM order, against
+    // markup the store injected after us. Doing this on every render would
+    // close the popover mid-interaction.
+    if (host && host.parentNode && host.nextSibling) {
+      const parent = host.parentNode;
+      const wasOpen = host.matches && host.matches(':popover-open');
+      parent.appendChild(host);
+      if (wasOpen && typeof host.showPopover === 'function') {
+        try {
+          host.showPopover();
+        } catch {
+          /* still in the top layer */
+        }
+      }
+    }
   }
 
   function hide() {

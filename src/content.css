@@ -45,3 +45,53 @@
   text-decoration-color: color-mix(in srgb, currentColor 30%, transparent);
 }
 .ub-quiet .ub-hit { text-decoration: none; }
+
+/* The "size chart available" call to action, placed next to a store's own size
+   guide link (or above an inline chart). Same blue as the chip, its own type
+   stack, and !important throughout because it lives in the page's own DOM. */
+.ub-cta {
+  all: unset !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin: 0 0 0 8px !important;
+  padding: 5px 11px 6px !important;
+  border-radius: 999px !important;
+  font-family: 'FerrariSans', -apple-system, system-ui, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  vertical-align: middle !important;
+  color: #ffffff !important;
+  background: #007aff !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+.ub-cta::before {
+  content: '' !important;
+  display: inline-block !important;
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  flex: 0 0 auto !important;
+}
+.ub-cta:hover { filter: brightness(1.1) !important; }
+.ub-cta:active { transform: translateY(0.5px) !important; }
+/* Above an inline chart rather than beside a link. */
+.ub-cta-block {
+  display: flex !important;
+  width: -moz-fit-content !important;
+  width: fit-content !important;
+  margin: 0 0 10px 0 !important;
+}
+@media (prefers-color-scheme: dark) {
+  .ub-cta { background: #0a84ff !important; }
+}

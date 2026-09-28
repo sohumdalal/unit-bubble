@@ -227,6 +227,9 @@
       parent.normalize();
     }
     for (const el of document.querySelectorAll('[data-ub-chart]')) el.removeAttribute('data-ub-chart');
+    for (const el of document.querySelectorAll('.ub-cta')) el.remove();
+    ctaEl = null;
+    ctaOpen = () => {};
     hideBubble();
     UB.panel.hide();
     charts.clear();
@@ -289,6 +292,7 @@
   function collectCells(root) {
     const cells = [];
     const labels = [];
+    let hidden = 0;
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const text = node.nodeValue;
@@ -306,13 +310,16 @@
       const cell = UB.chart.parseCell(text);
       const rect = rangeRect(node);
       if (!rect) {
-        if (cell) watchForVisible(node.parentElement);
+        if (cell) {
+          hidden += 1;
+          watchForVisible(node.parentElement);
+        }
         continue;
       }
       if (cell) cells.push({ ...cell, rect, node });
       else if (text.length <= 28) labels.push({ text, rect });
     }
-    return { cells, labels };
+    return { cells, labels, hidden };
   }
 
   // Ancestors holding enough numeric cells to be a chart, tightest first: depth
@@ -359,7 +366,9 @@
 
   function detectCharts() {
     if (!active) return;
-    const { cells, labels } = collectCells(document.body);
+    dropDeadCharts();
+    const { cells, labels, hidden } = collectCells(document.body);
+    attachPendingCta(hidden);
     if (cells.length < 6) return;
 
     const accepted = [];
@@ -397,7 +406,7 @@
         targetUnit: settings.length,
         labelHeader: 'Size',
         unitInferred: unitless,
-        autoOpen: settings.chartAuto !== false,
+        autoOpen: settings.chartAuto !== false || Date.now() < forceOpenUntil,
       };
       // Which measurements this chart is compared against. Inferred from the
       // chart's own columns and the page's words, switchable in the panel.
@@ -421,25 +430,110 @@
       }
       charts.set(cand.el, chart);
       accepted.push(cand.el);
+      attachChartCta(chart, cand.el);
       watchChart(cand.el);
     }
   }
 
+  // Opening is driven by the chart coming into view. Closing is not: the panel
+  // stays until it is dismissed, so a store collapsing its own size guide — or
+  // the chart scrolling away — doesn't take the conversions with it.
   function watchChart(el) {
     if (!chartObserver) {
       chartObserver = new IntersectionObserver(
         (entries) => {
           for (const entry of entries) {
             const chart = charts.get(entry.target);
-            if (!chart) continue;
-            if (entry.isIntersecting) UB.panel.show(chart);
-            else if (UB.panel.current() === chart.key) UB.panel.hide();
+            if (!chart || !entry.isIntersecting) continue;
+            UB.panel.show(chart);
           }
         },
         { threshold: 0.08 }
       );
     }
     chartObserver.observe(el);
+  }
+
+  // A chart whose element is gone (the store re-rendered, or you navigated
+  // within an SPA) has nothing left to show.
+  function dropDeadCharts() {
+    for (const [el, chart] of charts) {
+      if (el.isConnected) continue;
+      charts.delete(el);
+      if (UB.panel.current() === chart.key) UB.panel.hide();
+    }
+  }
+
+  // Signalling that a chart is there. One button, placed beside the store's own
+  // size-guide link where there is one — that is where you look for it — and
+  // above the chart itself otherwise. What it opens changes as we learn more:
+  // before the chart is readable it opens the store's guide, and once we have
+  // parsed the chart it opens the panel directly.
+  let ctaEl = null;
+  let ctaOpen = () => {};
+  let forceOpenUntil = 0;
+
+  function triggerElements() {
+    const out = [];
+    for (const el of document.querySelectorAll('a,button,summary,[role="button"]')) {
+      if (el.classList.contains('ub-cta') || el.closest('[data-ub-root]')) continue;
+      if (!UB.chart.looksLikeTrigger(el.textContent)) continue;
+      out.push(el);
+    }
+    return out;
+  }
+
+  function ensureCta(container) {
+    if (ctaEl && ctaEl.isConnected) return true;
+    const cta = document.createElement('button');
+    cta.type = 'button';
+    cta.textContent = 'Open Chart';
+    cta.title = `Read this size chart in ${settings.length === 'in' ? 'inches' : 'centimeters'}`;
+    cta.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      ctaOpen();
+    });
+
+    const trigger = triggerElements()[0];
+    if (trigger && trigger.parentElement) {
+      cta.className = 'ub-cta';
+      trigger.insertAdjacentElement('afterend', cta);
+    } else if (container) {
+      const block = container.closest('table,figure,section,article') || container;
+      if (!block.parentElement) return false;
+      cta.className = 'ub-cta ub-cta-block';
+      block.insertAdjacentElement('beforebegin', cta);
+    } else {
+      return false; // nothing to attach to yet
+    }
+    ctaEl = cta;
+    return true;
+  }
+
+  // A chart we have parsed: the button opens the panel.
+  function attachChartCta(chart, container) {
+    ctaOpen = () => {
+      chart.autoOpen = true;
+      UB.panel.show(chart);
+    };
+    ensureCta(container);
+  }
+
+  // A chart we can tell exists but cannot read yet, because the store keeps it
+  // hidden until its own modal opens. The button opens that modal, and the
+  // detection pass that follows brings up the panel.
+  function attachPendingCta(hiddenCells) {
+    if (hiddenCells < 6 || (ctaEl && ctaEl.isConnected)) return;
+    const trigger = triggerElements()[0];
+    if (!trigger) return;
+    ctaOpen = () => {
+      forceOpenUntil = Date.now() + 2500;
+      trigger.click();
+      queueRecheck(260);
+      setTimeout(() => queueRecheck(0), 800);
+    };
+    ensureCta(null);
   }
 
   function pageSignal() {
