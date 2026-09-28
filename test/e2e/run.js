@@ -336,6 +336,33 @@ const CASES = [
     },
   },
   {
+    name: 'price-update · a price written into a node we already skipped',
+    file: 'price-update.html',
+    settings: { length: 'cm', currency: 'EUR' },
+    settle: 2600,
+    async run(t, page) {
+      let s = await ui(page);
+      const price = s.hits.find((h) => (h.original || '').includes('68'));
+      t.ok('the real price got a chip after replacing a $0.00 placeholder', !!price,
+        JSON.stringify(s.hits.map((h) => (h.original || '').trim())));
+      t.ok('and converted', price && /€/.test(price.chip || ''), price && price.chip);
+
+      // Picking a size rewrites the same nodes again.
+      await page.click('#variant');
+      await page.waitForTimeout(1400);
+      s = await ui(page);
+      t.ok('a price updated by a variant choice converts too',
+        s.hits.some((h) => (h.original || '').includes('74')),
+        JSON.stringify(s.hits.map((h) => (h.original || '').trim())));
+      t.ok('and so does a measurement written in later',
+        s.hits.some((h) => (h.original || '').includes('22 in')),
+        JSON.stringify(s.hits.map((h) => (h.original || '').trim())));
+      t.ok('no stale chip for the placeholder', !s.hits.some((h) => (h.original || '').includes('0.00')));
+      t.noFlashes(s, { allowChipRemoval: true }); // the page rewrites its own nodes
+      t.clean(page);
+    },
+  },
+  {
     name: 'currencies · every price format on one page',
     file: 'currencies.html',
     settings: IN_USD,

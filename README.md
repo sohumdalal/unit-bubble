@@ -60,6 +60,10 @@ the panel highlights your row and tells you how each size differs on hover:
 - **Weight and temperature** aren't converted; lengths and prices only.
 - **A bare `"` in prose** after a number under 1000 is read as inches, so a
   quoted `5"` converts.
+- **A value in the middle of a sentence** is wrapped in place, which replaces
+  that text node. A page holding its own reference to that node (rare in prose,
+  common for prices — which are handled without replacing) would lose a later
+  update to it.
 - **`$` on a Canadian or Australian store** shows as your `$ means` choice until
   you change it; there are no per-site currency defaults.
 

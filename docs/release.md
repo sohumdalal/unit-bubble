@@ -32,6 +32,19 @@ Status of a Chrome Web Store release, honestly.
 - **`Col 2` headers.** When a chart's header can't be read, the column shows as
   `Col 2`. It's honest but looks unfinished.
 
+## Fixed on the way here, worth knowing
+
+- **A store's own price could go stale.** Marking replaced the page's text
+  node, so a store holding a reference to it — React updates text exactly that
+  way — wrote its price update into a detached node. The shopper would see the
+  old price with our chip beside it. A value that is the whole of its node is
+  now wrapped by *moving* the node, so the page keeps the object it owns, and a
+  text change refreshes or removes our chip.
+- **A price rendered as `$0.00` first was never converted.** The node was
+  skipped as a zero price and remembered as seen, and a later text change never
+  brought it back. Both found by the completeness check in the browser scan,
+  which asks whether anything convertible is still sitting there unconverted.
+
 ## Cleared
 
 - **Performance.** Measured against the mock stores, median of 3 runs: +8ms to

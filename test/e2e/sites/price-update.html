@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Quarter Zip — Mock Variant Store</title>
+<link rel="stylesheet" href="_store.css" />
+<main>
+  <h1>FINLAYSON QUARTER ZIP</h1>
+  <!-- Renders a zero placeholder first, then writes the real price into the
+       same text node when the variant resolves. A node already looked at and
+       skipped must be looked at again when its text changes. -->
+  <div class="product-price"><div class="current-price" id="price">$0.00</div></div>
+  <p id="spec">Chest: —</p>
+  <button id="variant" type="button">Choose size M</button>
+</main>
+<script>
+  const priceText = document.getElementById('price').firstChild;
+  const specText = document.getElementById('spec').firstChild;
+  setTimeout(() => {
+    priceText.nodeValue = '$68.00';
+  }, 1200);
+  document.getElementById('variant').addEventListener('click', () => {
+    priceText.nodeValue = '$74.00';
+    specText.nodeValue = 'Chest: 22 in';
+  });
+</script>

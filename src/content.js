@@ -192,19 +192,43 @@
       .filter((x) => x.conv && x.conv.primary);
     if (!usable.length) return 0;
 
-    const frag = document.createDocumentFragment();
-    let cursor = 0;
-    for (const { m, conv } of usable) {
-      if (m.start > cursor) frag.append(document.createTextNode(text.slice(cursor, m.start)));
+    const chipFor = (conv) => {
+      const chip = document.createElement('span');
+      chip.className = 'ub-chip';
+      chip.textContent = conv.primary;
+      return chip;
+    };
+    const hitFor = (m) => {
       const hit = document.createElement('span');
       hit.className = 'ub-hit';
       hit.dataset.ub = JSON.stringify(m);
       hit.dataset.ubKind = m.kind;
+      return hit;
+    };
+
+    // When the node is nothing but the value — a price in its own element, a
+    // chart cell — wrap it by MOVING the node rather than replacing it with a
+    // copy. Pages keep references to their own text nodes (React updates text
+    // exactly this way), and replacing one sends the store's later price update
+    // into a detached node: the shopper is then looking at a stale price, which
+    // is far worse than a missing chip.
+    if (usable.length === 1 && usable[0].m.start === 0 && usable[0].m.end === text.length) {
+      const { m, conv } = usable[0];
+      const hit = hitFor(m);
+      node.parentNode.insertBefore(hit, node);
+      hit.appendChild(node); // the same node object, still the page's own
+      hit.append(chipFor(conv));
+      if (m.kind === 'money') pendingCodeFix.push([hit, m.code]);
+      return 1;
+    }
+
+    const frag = document.createDocumentFragment();
+    let cursor = 0;
+    for (const { m, conv } of usable) {
+      if (m.start > cursor) frag.append(document.createTextNode(text.slice(cursor, m.start)));
+      const hit = hitFor(m);
       hit.append(document.createTextNode(text.slice(m.start, m.end)));
-      const chip = document.createElement('span');
-      chip.className = 'ub-chip';
-      chip.textContent = conv.primary;
-      hit.append(chip);
+      hit.append(chipFor(conv));
       frag.append(hit);
       if (m.kind === 'money') pendingCodeFix.push([hit, m.code]);
       cursor = m.end;
@@ -258,6 +282,31 @@
         /* the page moved it; a later pass will catch it */
       }
     }
+  }
+
+  // The page rewrote a value we had already marked. Recompute from the new text
+  // and update the chip, or take the marker off entirely if it no longer
+  // converts to anything.
+  function refreshHit(hit) {
+    const node = hit.firstChild;
+    if (!node || node.nodeType !== Node.TEXT_NODE) return;
+    const text = node.nodeValue;
+    const matches = UB.detect.findMatches(text, settings).filter((m) => m.start === 0 && m.end === text.length);
+    const conv = matches.length ? UB.convert(matches[0], settings, rates) : null;
+    const chip = hit.querySelector('.ub-chip');
+    if (conv && conv.primary) {
+      hit.dataset.ub = JSON.stringify(matches[0]);
+      hit.dataset.ubKind = matches[0].kind;
+      if (chip) chip.textContent = conv.primary;
+      else hit.append(Object.assign(document.createElement('span'), { className: 'ub-chip', textContent: conv.primary }));
+      return;
+    }
+    if (chip) chip.remove();
+    const parent = hit.parentNode;
+    if (!parent) return;
+    parent.insertBefore(node, hit); // hand the page's own node back
+    hit.remove();
+    seen.delete(node);
   }
 
   function unmark() {
@@ -875,11 +924,32 @@
     pass(document.body);
     observer = new MutationObserver((records) => {
       let recheck = false;
+      let rescan = false;
       for (const r of records) {
         if (r.target instanceof Element && r.target.closest('[data-ub-root]')) continue;
-        if ((r.type === 'childList' && r.addedNodes.length) || r.type === 'characterData') return queuePass();
-        if (r.type === 'attributes') recheck = true;
+        if (r.type === 'characterData') {
+          // A node we have already looked at can change its text — a price
+          // updating when you pick a size is the common case, and a store that
+          // first renders "$0.00" gets skipped as a zero price. Without
+          // forgetting the node here, that price is never converted at all.
+          const hit = r.target.parentElement && r.target.parentElement.closest('.ub-hit');
+          if (hit) {
+            try {
+              refreshHit(hit);
+            } catch {
+              /* the page moved it; a later pass will catch it */
+            }
+            continue;
+          }
+          seen.delete(r.target);
+          deferredSet.delete(r.target);
+          rescan = true;
+          continue;
+        }
+        if (r.type === 'childList' && r.addedNodes.length) rescan = true;
+        else if (r.type === 'attributes') recheck = true;
       }
+      if (rescan) return queuePass();
       if (recheck) queueRecheck(150);
     });
     for (const delay of [300, 900, 2000, 4500]) setTimeout(() => queueRecheck(0), delay);

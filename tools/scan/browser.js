@@ -13,8 +13,8 @@
 //      catch a wrong currency or a factor of 100, not a stale rate
 //   3. no chip inside an <input>, <textarea>, contenteditable, or <svg>
 //   4. the original value is left intact inside its marker
-//   5. chips don't multiply on a second look, and don't vanish unexplained
-//      (a chart being found legitimately strips the chips inside it)
+//   5. no marker sits inside another, and nothing convertible on the page is
+//      left unconverted
 //   6. the extension logged no errors
 //   7. where a size-guide control exists, the Open Chart button exists
 require('../../src/lib/currencies.js');
@@ -131,11 +131,11 @@ function checkPage(state, second, errors) {
   // Double-marking is a marker inside a marker — not simply "more chips than
   // before", which is what a page lazy-loading another section looks like.
   if (second.nested) problems.push({ why: `marked twice: ${second.nested} nested markers`, text: '' });
-  // A drop is only a fault if the chips don't come back: a page that re-renders
-  // its own subtree throws our markers away, and the next pass restores them.
-  if (second.chips < state.chips && !second.chartMarked && !second.recovered) {
-    problems.push({ why: `chips vanished and did not return: ${state.chips} → ${second.chips}`, text: '' });
-  }
+  // Counting chips before and after says nothing useful: a page that removes
+  // its own carousel looks identical to one where we lost our markers. The
+  // property worth checking is completeness — is anything convertible still
+  // sitting there unconverted? That is computed from the page's own text in
+  // checkCompleteness below.
   // A button is promised only where there is a chart to deliver, so the
   // invariant runs the other way: a chart that was read must offer a button,
   // and a button must never appear with neither a chart nor a control.
@@ -278,6 +278,43 @@ async function main() {
         if (panel.open && (!panel.rows || panel.rows < 2)) {
           problemsFromPanel.push({ why: `panel opened with ${panel.rows} rows`, text: '' });
         }
+      }
+
+      // Completeness: take the page's visible text that is not already marked,
+      // run the real detector over it, and see what is left behind.
+      const leftovers = await page.evaluate(() => {
+        const out = [];
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+          acceptNode(node) {
+            const text = node.nodeValue;
+            if (!text || !/\d/.test(text)) return NodeFilter.FILTER_REJECT;
+            const parent = node.parentElement;
+            if (!parent) return NodeFilter.FILTER_REJECT;
+            if (parent.closest('.ub-hit,.ub-chip,.ub-cta,[data-ub-root],[data-ub-chart]')) return NodeFilter.FILTER_REJECT;
+            if (parent.closest('script,style,noscript,textarea,input,select,option,template,[contenteditable]')) {
+              return NodeFilter.FILTER_REJECT;
+            }
+            if (parent.ownerSVGElement) return NodeFilter.FILTER_REJECT;
+            const box = parent.getBoundingClientRect();
+            if (!box.width && !box.height) return NodeFilter.FILTER_REJECT; // hidden
+            return NodeFilter.FILTER_ACCEPT;
+          },
+        });
+        while (out.length < 400 && walker.nextNode()) out.push(walker.currentNode.nodeValue);
+        return out;
+      });
+      const missed = [];
+      for (const text of leftovers) {
+        for (const match of UB.detect.findMatches(text, SETTINGS)) {
+          const conv = UB.convert(match, SETTINGS, RATES);
+          if (conv && conv.primary) missed.push(match.text);
+        }
+      }
+      if (missed.length) {
+        problemsFromPanel.push({
+          why: `${missed.length} convertible values left unconverted`,
+          text: missed.slice(0, 6).join(' · '),
+        });
       }
 
       const problems = checkPage(state, second, errors).concat(problemsFromPanel);
