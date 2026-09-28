@@ -37,6 +37,9 @@ check('mm', first('45 mm thick'), '45mm');
 check('inches word', first('9 inches long'), '228.6mm');
 check('feet+inches', first('5\'10" tall'), '1778mm');
 check('inch mark', first('screen 27"'), '685.8mm');
+check('french height', first('Quentin is 1m82 and wears M'), '1820mm');
+check('french height short', first('elle mesure 1m8'), '1800mm');
+check('spaced m is not compound', first('1 m 82 cm apart'), '1000mm');
 
 // --- not lengths -------------------------------------------------------------
 check('minutes', first('ready in 5 minutes'), null);

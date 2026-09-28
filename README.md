@@ -49,7 +49,7 @@ stays completely untouched.
 ## What it detects
 
 - **Lengths** — `mm`, `cm`, `m`, `in`/`inch`/`inches`/`"`, `ft`/`feet`/`'`, and
-  compound `5'10"`.
+  compound heights in both conventions: `5'10"` and the French `1m82`.
 - **Prices** — symbol before or after the number (`€19,99`, `1 495 kr`,
   `zł129`), prefixed dollar and yen variants (`US$`, `C$`, `R$`, `CN¥`), and ISO
   codes on either side (`1.299,00 EUR`, `CHF 48.20`).
@@ -57,7 +57,8 @@ stays completely untouched.
   separator position, with the currency as a tiebreaker on the genuinely
   ambiguous `1.299`.
 
-Deliberately skipped: uppercase `M` (million, not metres), `in` inside words,
+Deliberately skipped: uppercase `M` (million, not metres), `290 GSM`, years
+(`BRUT 2026`), decade apostrophes (`LOOKBOOK '26`), `in` inside words,
 inputs, textareas and `contenteditable`, and anything already in your units.
 
 ## Rates

@@ -29,6 +29,9 @@
     `(?<![\\w.,])(\\d{1,2})${SPACE}*(?:'|’|′|ft\\.?|feet|foot)${SPACE}*(\\d{1,2}(?:[.,]\\d{1,2})?)${SPACE}*(?:"|”|″|in\\.?|inch(?:es)?)(?![\\w])`,
     'gi'
   );
+  // French/Benelux height shorthand: 1m82 = 1.82 m. Written without spaces, which
+  // is what keeps it from colliding with "1 m 82 cm apart".
+  const METRE_CM = new RegExp(`(?<![\\w.,])(\\d)m(\\d{1,2})(?![\\w])`, 'g');
   const LENGTH = new RegExp(
     `(?<![\\w.,$€£¥₹])(${NUM})${SPACE}*(${LENGTH_ALT})(?![\\w])`,
     'gi'
@@ -120,6 +123,20 @@
         text: m[0],
         mm: ft * 304.8 + inch * 25.4,
         unit: 'ftin',
+      });
+    }
+
+    METRE_CM.lastIndex = 0;
+    while ((m = METRE_CM.exec(text))) {
+      const metres = Number(m[1]);
+      const cm = Number(m[2].length === 1 ? m[2] + '0' : m[2]); // 1m8 means 1m80
+      push(out, {
+        kind: 'length',
+        start: m.index,
+        end: m.index + m[0].length,
+        text: m[0],
+        mm: metres * 1000 + cm * 10,
+        unit: 'm',
       });
     }
 
