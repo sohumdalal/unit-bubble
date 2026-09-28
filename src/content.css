@@ -1,40 +1,46 @@
-/* The inline chip. It has to survive whatever the host page's CSS does to
-   spans, hence the !important on everything structural. Colours are derived
-   from currentColor, so the chip picks up the page's own light/dark contrast
-   instead of guessing at it. */
+/* The inline chip.
+   - Apple's message-bubble blue, so a conversion reads as ours at a glance and
+     never as part of the store's own copy.
+   - Its own type stack (the Ferrari design-system stack) rather than inheriting
+     the page's: on a monospace store the inherited font made the chip look like
+     a typo in the price.
+   - !important throughout because this span lives inside the page's own CSS. */
 .ub-chip {
   all: unset !important;
-  display: inline !important;
-  margin-left: 0.3em !important;
-  padding: 0.05em 0.34em !important;
-  border-radius: 0.45em !important;
-  font-family: inherit !important;
-  font-size: 0.82em !important;
+  display: inline-block !important;
+  margin: 0 0.1em 0 0.34em !important;
+  padding: 0.12em 0.5em 0.16em !important;
+  border-radius: 999px !important;
+  font-family: 'FerrariSans', -apple-system, system-ui, sans-serif !important;
+  font-size: 0.92em !important;
   font-weight: 500 !important;
   font-style: normal !important;
-  line-height: inherit !important;
+  line-height: 1.32 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
   text-decoration: none !important;
+  text-shadow: none !important;
   font-variant-numeric: tabular-nums !important;
   white-space: nowrap !important;
   vertical-align: baseline !important;
-  color: inherit !important;
-  opacity: 0.72 !important;
-  background: color-mix(in srgb, currentColor 9%, transparent) !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 14%, transparent) !important;
+  color: #ffffff !important;
+  background: #007aff !important;
+  box-shadow: none !important;
   cursor: help !important;
   -webkit-user-select: none !important;
   user-select: none !important;
 }
-/* Browsers without color-mix still get a readable chip. */
-@supports not (background: color-mix(in srgb, currentColor 9%, transparent)) {
-  .ub-chip { background: rgba(127, 127, 127, 0.14) !important; }
+@media (prefers-color-scheme: dark) {
+  .ub-chip { background: #0a84ff !important; }
 }
-.ub-hit:hover > .ub-chip { opacity: 0.95 !important; }
+.ub-hit:hover > .ub-chip { filter: brightness(1.12) !important; }
 
-/* Optional marking of the original value. Off by default now that the chip
-   itself is the signal. */
-.ub-hit { text-decoration: underline dotted; text-decoration-thickness: 1px; text-underline-offset: 2px;
-  text-decoration-color: color-mix(in srgb, currentColor 30%, transparent); }
+/* Optional marking of the original value. Off by default — the chip is the
+   signal now. */
+.ub-hit {
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in srgb, currentColor 30%, transparent);
+}
 .ub-quiet .ub-hit { text-decoration: none; }

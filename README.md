@@ -1,9 +1,10 @@
 # Unit Bubble
 
 A Chrome extension for shopping on sites that don't use your units. Every price
-and measurement on the page carries a small chip with the converted value, right
-where you're already looking — `€65.00 ($74.00)`, `63.5 cm (25.0″)`. Hover one
-for the original and the rate behind it.
+and measurement on the page carries a chip with the converted value, right where
+you're already looking — `€65.00 EUR $74.00`, `63.5 cm 25.0″`. The chip is a
+bright blue pill in its own type stack, so it never reads as part of the store's
+own copy. Hover one for the original and the rate behind it.
 
 Size charts get their own treatment: the whole chart is re-rendered in a floating
 panel in your units, with a toggle back to the original.
@@ -130,5 +131,7 @@ npm test
   change it — per-site currency defaults aren't in yet.
 - Weight (`kg` → `lb`) and temperature aren't handled; lengths and prices only.
 - A chip adds text, so very tight layouts shift a little.
+- Where a store prints the code after the price (`€65.00EUR`), the chip goes
+  after the code — including when the code sits in its own element.
 - Charts with fewer than 3 sizes, or a single measurement column, don't trip the
   panel — they stay as ordinary chips.

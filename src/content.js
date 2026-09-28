@@ -32,7 +32,7 @@
     .b {
       position: fixed; z-index: 2147483647; pointer-events: none;
       box-sizing: border-box; max-width: 260px; padding: 7px 10px 8px; border-radius: 10px;
-      font: 400 12px/1.35 ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+      font: 400 12.5px/1.4 'FerrariSans', -apple-system, system-ui, sans-serif;
       background: rgba(255,255,255,.88); color: #0b0b0c;
       -webkit-backdrop-filter: saturate(180%) blur(14px); backdrop-filter: saturate(180%) blur(14px);
       border: 1px solid rgba(0,0,0,.08);
@@ -40,14 +40,14 @@
       opacity: 0; transform: translateY(3px); transition: opacity .12s ease, transform .14s cubic-bezier(.2,.8,.2,1);
     }
     .b.in { opacity: 1; transform: none; }
-    .v { font-size: 14px; font-weight: 590; letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .o { margin-top: 2px; font-size: 11px; color: rgba(0,0,0,.45); font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .n { margin-top: 3px; font-size: 10px; color: rgba(0,0,0,.34); white-space: nowrap; }
+    .v { font-size: 15px; font-weight: 500; letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .o { margin-top: 2px; font-size: 11.5px; color: rgba(0,0,0,.45); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .n { margin-top: 4px; font-size: 10.5px; color: #007aff; white-space: nowrap; }
     .stale { color: #a2600b; }
     @media (prefers-color-scheme: dark) {
       .b { background: rgba(28,28,30,.86); color: #f5f5f7; border-color: rgba(255,255,255,.1);
            box-shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px -6px rgba(0,0,0,.6); }
-      .o { color: rgba(255,255,255,.5); } .n { color: rgba(255,255,255,.36); } .stale { color: #f0b76b; }
+      .o { color: rgba(255,255,255,.5); } .n { color: #4da2ff; } .stale { color: #f0b76b; }
     }
     @media (prefers-reduced-motion: reduce) { .b { transition: none; } }
   `;
@@ -184,11 +184,34 @@
       chip.textContent = conv.primary;
       hit.append(chip);
       frag.append(hit);
+      if (m.kind === 'money') pendingCodeFix.push([hit, m.code]);
       cursor = m.end;
     }
     if (cursor < text.length) frag.append(document.createTextNode(text.slice(cursor)));
     node.parentNode.replaceChild(frag, node);
     return usable.length;
+  }
+
+  // Some stores print the code in its own node: <span>€65.00</span><span>EUR</span>.
+  // Move the chip past it so the line reads "€65.00 EUR ($74.00)".
+  const pendingCodeFix = [];
+
+  function tidyCurrencyCodes() {
+    while (pendingCodeFix.length) {
+      const [hit, code] = pendingCodeFix.pop();
+      const chip = hit.querySelector('.ub-chip');
+      if (!chip || !hit.isConnected) continue;
+      const next = hit.nextSibling;
+      if (!next) continue;
+      if (next.nodeType === Node.TEXT_NODE) {
+        const match = next.nodeValue.match(/^\s*([A-Za-z]{3})\b/);
+        if (!match || match[1].toUpperCase() !== code) continue;
+        next.splitText(match[0].length);
+        next.after(chip);
+      } else if (next.nodeType === Node.ELEMENT_NODE && next.textContent.trim().toUpperCase() === code) {
+        next.after(chip);
+      }
+    }
   }
 
   function unmark() {
@@ -212,9 +235,27 @@
 
   const imperial = (unit) => unit === 'in' || unit === 'ft' || unit === 'ftin';
 
+  // The values' container is usually a <tbody> or a row wrapper, and the column
+  // headers sit outside it. Widen to the nearest ancestor that isn't much
+  // bigger than the chart itself, so "Shoulders (A)" is in scope but the rest
+  // of the page is not.
+  function labelScope(container) {
+    const area = (el) => {
+      const r = el.getBoundingClientRect();
+      return Math.max(r.width * r.height, 1);
+    };
+    const base = area(container);
+    let scope = container;
+    for (let el = container.parentElement, i = 0; el && i < 3; el = el.parentElement, i++) {
+      if (area(el) > base * 3.2) break;
+      scope = el;
+    }
+    return scope;
+  }
+
   function labelCandidates(container) {
     const out = [];
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    const walker = document.createTreeWalker(labelScope(container), NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const t = node.nodeValue && node.nodeValue.trim();
         if (!t || t.length > 28) return NodeFilter.FILTER_REJECT;
@@ -246,9 +287,11 @@
         byEl.get(el).items.push(hit);
       }
     }
+    // depth counts steps up from the value, so the smallest depth is the
+    // tightest container. Tightest first: a <tbody> must win over <body>.
     return [...byEl.values()]
       .filter((c) => c.items.length >= MIN_CHART_HITS)
-      .sort((a, b) => b.depth - a.depth || a.items.length - b.items.length);
+      .sort((a, b) => a.depth - b.depth || b.items.length - a.items.length);
   }
 
   function detectCharts() {
@@ -335,6 +378,7 @@
       }
     }
     if (marked) {
+      tidyCurrencyCodes();
       // Charts need layout, so read geometry after the marking writes settle.
       requestAnimationFrame(() => {
         try {

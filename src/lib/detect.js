@@ -182,6 +182,17 @@
       push(out, { kind: 'money', start: m.index, end: m.index + m[0].length, text: m[0], code, value });
     }
 
+    // "€65.00EUR" — the code repeats what the symbol already said. Absorb it so
+    // the conversion can be placed after the whole price, not inside it.
+    for (const m of out) {
+      if (m.kind !== 'money') continue;
+      const trail = text.slice(m.end).match(/^\s?([A-Za-z]{3})\b/);
+      if (trail && trail[1].toUpperCase() === m.code) {
+        m.end += trail[0].length;
+        m.text = text.slice(m.start, m.end);
+      }
+    }
+
     return out.sort((a, b) => a.start - b.start);
   }
 

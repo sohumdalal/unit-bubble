@@ -4,98 +4,91 @@
 (function (root) {
   const UB = (root.UB = root.UB || {});
 
+  const FONT = "'FerrariSans', -apple-system, system-ui, sans-serif";
+  const BLUE = '#007aff';
+  const BLUE_DARK = '#0a84ff';
+
   const CSS = `
     :host { all: initial; }
     .wrap {
       position: fixed; z-index: 2147483646;
-      right: 18px; bottom: 18px; width: 336px; max-width: calc(100vw - 32px);
-      box-sizing: border-box; border-radius: 14px; overflow: hidden;
-      font: 400 12px/1.45 ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
-      color: #0b0b0c;
-      background: rgba(252,252,253,.92);
-      -webkit-backdrop-filter: saturate(180%) blur(16px);
-      backdrop-filter: saturate(180%) blur(16px);
+      right: 24px; bottom: 24px; width: 372px; max-width: calc(100vw - 32px);
+      box-sizing: border-box; border-radius: 16px; overflow: hidden;
+      font: 400 13px/1.45 ${FONT};
+      color: #101013; background: #fdfdfe;
       border: 1px solid rgba(0,0,0,.1);
-      box-shadow: 0 2px 6px rgba(0,0,0,.06), 0 18px 48px -12px rgba(0,0,0,.35);
-      opacity: 0; transform: translateY(8px) scale(.99);
-      transition: opacity .16s ease, transform .2s cubic-bezier(.2,.8,.2,1);
+      box-shadow: 0 2px 8px rgba(0,0,0,.07), 0 24px 56px -14px rgba(0,0,0,.4);
+      opacity: 0; transform: translateY(10px); transition: opacity .16s ease, transform .2s cubic-bezier(.2,.8,.2,1);
     }
     .wrap.in { opacity: 1; transform: none; }
     header {
-      display: flex; align-items: center; gap: 8px;
-      padding: 10px 10px 10px 12px;
-      border-bottom: 1px solid rgba(0,0,0,.07);
+      display: flex; align-items: center; gap: 9px;
+      padding: 12px 11px 12px 14px; border-bottom: 1px solid rgba(0,0,0,.08);
       cursor: grab; user-select: none;
     }
     header.drag { cursor: grabbing; }
-    .dot {
-      width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto;
-      background: linear-gradient(145deg, #6f6ff0, #4b3fd1);
-    }
-    h2 { margin: 0; font-size: 12px; font-weight: 590; letter-spacing: -.01em; flex: 1 1 auto; }
-    .seg {
-      display: flex; padding: 2px; gap: 2px; border-radius: 7px;
-      background: rgba(0,0,0,.06); flex: 0 0 auto;
-    }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: ${BLUE}; flex: 0 0 auto; }
+    h2 { margin: 0; font-size: 13px; font-weight: 500; letter-spacing: -.005em; flex: 1 1 auto; }
+    h2 small { font-weight: 400; color: rgba(16,16,19,.42); }
+    .seg { display: flex; padding: 2px; gap: 2px; border-radius: 8px; background: rgba(0,0,0,.055); flex: 0 0 auto; }
     .seg button {
-      font: 590 10.5px/1 inherit; letter-spacing: .02em; text-transform: uppercase;
-      border: 0; border-radius: 5px; padding: 4px 7px; cursor: pointer;
-      background: transparent; color: rgba(11,11,12,.55);
+      font: 500 11px/1 ${FONT}; letter-spacing: .02em;
+      border: 0; border-radius: 6px; padding: 5px 9px; cursor: pointer;
+      background: transparent; color: rgba(16,16,19,.5);
     }
-    .seg button[aria-pressed="true"] { background: #fff; color: #0b0b0c; box-shadow: 0 1px 2px rgba(0,0,0,.14); }
+    .seg button[aria-pressed="true"] { background: ${BLUE}; color: #fff; }
     .x {
       border: 0; background: transparent; cursor: pointer; flex: 0 0 auto;
-      width: 22px; height: 22px; border-radius: 6px; color: rgba(11,11,12,.45);
-      font: 400 14px/1 inherit;
+      width: 24px; height: 24px; border-radius: 7px; color: rgba(16,16,19,.4);
+      font: 400 15px/1 ${FONT};
     }
-    .x:hover { background: rgba(0,0,0,.06); color: inherit; }
-    .body { max-height: min(56vh, 460px); overflow: auto; padding: 4px 6px 6px; }
+    .x:hover { background: rgba(0,0,0,.06); color: #101013; }
+    .body { max-height: min(62vh, 520px); overflow: auto; padding: 2px 8px 8px; }
     table { border-collapse: collapse; width: 100%; }
-    th, td {
-      padding: 6px 8px; text-align: right; white-space: nowrap;
-      font-variant-numeric: tabular-nums;
-    }
+    th, td { padding: 8px 9px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
     th {
       position: sticky; top: 0; z-index: 1;
-      font-size: 9.5px; font-weight: 590; letter-spacing: .05em; text-transform: uppercase;
-      color: rgba(11,11,12,.45); background: rgba(252,252,253,.96);
-      border-bottom: 1px solid rgba(0,0,0,.08);
+      font-size: 10.5px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase;
+      color: rgba(16,16,19,.42); background: #fdfdfe; border-bottom: 1px solid rgba(0,0,0,.09);
     }
     th:first-child, td:first-child { text-align: left; }
-    td { border-bottom: 1px solid rgba(0,0,0,.05); }
+    td { font-size: 13.5px; border-bottom: 1px solid rgba(0,0,0,.055); }
     tr:last-child td { border-bottom: 0; }
-    td.size { font-weight: 590; }
-    tr.pick td { background: rgba(91,91,214,.1); }
-    tr.pick td:first-child { box-shadow: inset 2px 0 0 #5b5bd6; }
+    td.size { font-weight: 500; }
+    tr.pick td { background: rgba(0,122,255,.1); }
+    tr.pick td:first-child { box-shadow: inset 2.5px 0 0 ${BLUE}; }
+    tr.pick td.hit { color: ${BLUE}; font-weight: 500; }
     .foot {
-      display: flex; align-items: center; gap: 6px; justify-content: space-between;
-      padding: 8px 12px 10px; border-top: 1px solid rgba(0,0,0,.07);
-      font-size: 10.5px; color: rgba(11,11,12,.45);
+      display: flex; align-items: center; gap: 8px; justify-content: space-between;
+      padding: 10px 14px 12px; border-top: 1px solid rgba(0,0,0,.08);
+      font-size: 11.5px; color: rgba(16,16,19,.45);
     }
-    .foot a { color: #5b5bd6; text-decoration: none; }
+    .foot a { color: ${BLUE}; text-decoration: none; }
     .foot a:hover { text-decoration: underline; }
     .pill {
-      position: fixed; z-index: 2147483646; right: 18px; bottom: 18px;
-      display: flex; align-items: center; gap: 7px;
-      padding: 8px 12px; border-radius: 999px; cursor: pointer;
-      font: 590 11.5px/1 ui-sans-serif, -apple-system, system-ui, sans-serif;
-      color: #0b0b0c; background: rgba(252,252,253,.94);
-      -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-      border: 1px solid rgba(0,0,0,.1);
-      box-shadow: 0 2px 6px rgba(0,0,0,.08), 0 10px 28px -10px rgba(0,0,0,.3);
+      position: fixed; z-index: 2147483646; right: 24px; bottom: 24px;
+      display: flex; align-items: center; gap: 8px; padding: 10px 15px; border-radius: 999px;
+      cursor: pointer; font: 500 12.5px/1 ${FONT};
+      color: #fff; background: ${BLUE}; border: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,.14), 0 12px 30px -10px rgba(0,60,140,.5);
     }
+    .pill .dot { background: rgba(255,255,255,.9); }
     @media (prefers-color-scheme: dark) {
-      .wrap, .pill { background: rgba(28,28,30,.9); color: #f5f5f7; border-color: rgba(255,255,255,.12); }
-      header, .foot, th { border-color: rgba(255,255,255,.09); }
-      th { background: rgba(28,28,30,.96); color: rgba(245,245,247,.5); }
-      td { border-color: rgba(255,255,255,.06); }
+      .wrap { background: #1c1c1e; color: #f5f5f7; border-color: rgba(255,255,255,.13); }
+      header, .foot { border-color: rgba(255,255,255,.1); }
+      h2 small { color: rgba(245,245,247,.45); }
+      th { background: #1c1c1e; color: rgba(245,245,247,.45); border-color: rgba(255,255,255,.12); }
+      td { border-color: rgba(255,255,255,.07); }
+      .dot, .seg button[aria-pressed="true"], .pill { background: ${BLUE_DARK}; }
       .seg { background: rgba(255,255,255,.1); }
-      .seg button { color: rgba(245,245,247,.6); }
-      .seg button[aria-pressed="true"] { background: rgba(255,255,255,.18); color: #fff; box-shadow: none; }
-      .x:hover { background: rgba(255,255,255,.1); }
-      tr.pick td { background: rgba(139,139,240,.18); }
-      tr.pick td:first-child { box-shadow: inset 2px 0 0 #8b8bf0; }
-      .foot a { color: #8b8bf0; }
+      .seg button { color: rgba(245,245,247,.55); }
+      .x { color: rgba(245,245,247,.45); }
+      .x:hover { background: rgba(255,255,255,.1); color: #fff; }
+      tr.pick td { background: rgba(10,132,255,.2); }
+      tr.pick td:first-child { box-shadow: inset 2.5px 0 0 ${BLUE_DARK}; }
+      tr.pick td.hit { color: #7ab8ff; }
+      .foot, .foot a { color: rgba(245,245,247,.45); }
+      .foot a { color: #7ab8ff; }
     }
     @media (prefers-reduced-motion: reduce) { .wrap { transition: none; } }
   `;
@@ -154,7 +147,7 @@
     const head = document.createElement('header');
     head.innerHTML = `
       <i class="dot"></i>
-      <h2>Size chart</h2>
+      <h2>Size chart <small>in ${unit === 'orig' ? (chart.sourceUnit === 'in' ? 'inches' : 'centimeters') : unit === 'in' ? 'inches' : 'centimeters'}</small></h2>
       <div class="seg">
         <button data-u="orig" aria-pressed="${unit === 'orig'}">${chart.sourceUnit}</button>
         <button data-u="${chart.targetUnit}" aria-pressed="${unit !== 'orig'}">${chart.targetUnit === 'in' ? 'in' : 'cm'}</button>
@@ -172,7 +165,10 @@
         .map((row, r) => {
           const picked = chart.pick && chart.pick.row === r ? ' class="pick"' : '';
           return `<tr${picked}><td class="size">${escape(grid.rowLabels[r] || '·')}</td>${row
-            .map((item) => `<td>${escape(cellText(item, unit))}</td>`)
+            .map((item, c) => {
+              const hit = chart.pick && chart.pick.row === r && chart.pick.col === c ? ' class="hit"' : '';
+              return `<td${hit}>${escape(cellText(item, unit))}</td>`;
+            })
             .join('')}</tr>`;
         })
         .join('')}</tbody>`;
@@ -213,7 +209,7 @@
       clear();
       const pill = document.createElement('button');
       pill.className = 'pill';
-      pill.innerHTML = `<i class="dot"></i> Size chart in ${chart.targetUnit === 'in' ? 'inches' : 'cm'}`;
+      pill.innerHTML = `<i class="dot"></i> Size chart in ${chart.targetUnit === 'in' ? 'inches' : 'centimeters'}`;
       pill.onclick = () => {
         state.collapsed = false;
         render();

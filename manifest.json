@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Unit Bubble",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hover any price or measurement on any page and a small bubble shows it in your units.",
   "permissions": ["storage", "alarms", "activeTab"],
   "host_permissions": ["https://open.er-api.com/*"],

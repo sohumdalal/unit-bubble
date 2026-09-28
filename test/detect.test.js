@@ -54,6 +54,8 @@ check('gbp', first('£45'), 'GBP 45');
 check('yen default', first('¥12,800'), 'JPY 12800');
 check('krona default', first('19 800 kr'), 'SEK 19800');
 check('zloty', first('zł129'), 'PLN 129');
+check('symbol plus repeated code', first('€65.00EUR'), 'EUR 65');
+check('symbol plus spaced code', first('€65.00 EUR'), 'EUR 65');
 check('yen as cny', first('¥100', { ...S, yenMeans: 'CNY' }), 'CNY 100');
 check('dollar as cad', first('$100', { ...S, dollarMeans: 'CAD' }), 'CAD 100');
 
@@ -80,6 +82,16 @@ check('missing rate is flagged', (() => {
 // --- ordering / overlap ------------------------------------------------------
 check('multiple in one string', UB.detect.findMatches('Waist 81cm, price €49,99', S).length, 2);
 check('overlap kept once', UB.detect.findMatches('5\'10"', S).length, 1);
+check(
+  'repeated code is inside the match',
+  UB.detect.findMatches('€65.00EUR', S)[0].text,
+  '€65.00EUR'
+);
+check(
+  'a different trailing code is left alone',
+  UB.detect.findMatches('€65.00 USD', S)[0].text,
+  '€65.00'
+);
 
 console.log(`${pass} passed, ${fails.length} failed`);
 if (fails.length) {

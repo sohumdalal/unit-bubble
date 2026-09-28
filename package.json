@@ -1,6 +1,6 @@
 {
   "name": "unit-bubble",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Chrome extension: hover a price or measurement, see it in your units.",
   "scripts": {
