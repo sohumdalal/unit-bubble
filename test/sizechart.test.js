@@ -1,10 +1,11 @@
 // Run with: node test/sizechart.test.js
-// Feeds the chart reader the rectangles a browser would report, so the grid
-// reconstruction can be tested without a browser.
+// Feeds the chart reader the rectangles a browser would report, so grid
+// reconstruction, orientation and unit inference are all testable without one.
 require('../src/lib/currencies.js');
 require('../src/lib/detect.js');
 require('../src/lib/convert.js');
 require('../src/lib/sizechart.js');
+require('../src/lib/fit.js');
 
 let pass = 0;
 const fails = [];
@@ -12,9 +13,24 @@ const check = (name, got, want) =>
   got === want ? pass++ : fails.push(`${name}\n    got  ${JSON.stringify(got)}\n    want ${JSON.stringify(want)}`);
 
 const rect = (left, top, w = 34, h = 16) => ({ left, top, right: left + w, bottom: top + h });
-const cm = (v, left, top) => ({ mm: v * 10, unit: 'cm', text: `${v}cm`, rect: rect(left, top) });
+const cell = (text, left, top, w) => ({ ...UB.chart.parseCell(text), rect: rect(left, top, w) });
 
-// The brut-clothing chart: 6 sizes x 4 measurements.
+/* 1. Cell parsing -------------------------------------------------------- */
+check('cell with unit', JSON.stringify(UB.chart.parseCell('47cm')), JSON.stringify({ value: 47, unit: 'cm', mm: 470 }));
+check('cell spaced unit', UB.chart.parseCell('63.5 cm').mm, 635);
+check('cell inch mark', UB.chart.parseCell('27"').mm, 685.8);
+check('cell bare', JSON.stringify(UB.chart.parseCell('23')), JSON.stringify({ value: 23, unit: null, mm: null }));
+check('cell mixed fraction', UB.chart.parseCell('25 1/2').value, 25.5);
+check('cell quarter', UB.chart.parseCell('24 1/4').value, 24.25);
+check('cell three quarters', UB.chart.parseCell('22 3/4').value, 22.75);
+check('cell bare fraction', UB.chart.parseCell('1/2').value, 0.5);
+check('cell fraction with unit', UB.chart.parseCell('21 1/2 in').mm, 546.1);
+check('cell comma decimal', UB.chart.parseCell('63,5 cm').mm, 635);
+check('cell rejects words', UB.chart.parseCell('CHEST'), null);
+check('cell rejects mixed text', UB.chart.parseCell('47cm chest'), null);
+check('cell rejects zero', UB.chart.parseCell('0'), null);
+
+/* 2. Sizes down the rows (brut-clothing: cm, units in every cell) -------- */
 const COLS = [720, 950, 1180, 1400];
 const ROWS = [440, 485, 528, 570, 614, 657];
 const DATA = [
@@ -25,10 +41,9 @@ const DATA = [
   [61, 67, 66, 25],
   [65, 71, 69, 26],
 ];
-const items = [];
-DATA.forEach((row, r) => row.forEach((v, c) => items.push(cm(v, COLS[c], ROWS[r]))));
-
-const labels = [
+const cmItems = [];
+DATA.forEach((row, r) => row.forEach((v, c) => cmItems.push(cell(`${v}cm`, COLS[c], ROWS[r]))));
+const cmLabels = [
   { text: 'Size', rect: rect(530, 395, 40) },
   { text: 'Shoulders (A)', rect: rect(690, 395, 100) },
   { text: 'Chest (B)', rect: rect(930, 395, 80) },
@@ -37,81 +52,124 @@ const labels = [
   ...['XS', 'S', 'M', 'L', 'XL', 'XXL'].map((t, i) => ({ text: t, rect: rect(535, ROWS[i], 26) })),
 ];
 
-const grid = UB.chart.buildGrid(items);
-check('grid found', !!grid, true);
-check('rows', grid.cells.length, 6);
-check('cols', grid.colBands.length, 4);
-check('every slot filled', grid.filled, 24);
-check('first cell', grid.cells[0][0].mm, 470);
-check('last cell', grid.cells[5][3].mm, 260);
+const cmGrid = UB.chart.orient(UB.chart.attachLabels(UB.chart.buildGrid(cmItems), cmLabels));
+check('cm grid rows', cmGrid.cells.length, 6);
+check('cm grid cols', cmGrid.cells[0].length, 4);
+check('cm grid not transposed', cmGrid.transposed, false);
+check('cm headers', cmGrid.headers.join('|'), 'Shoulders (A)|Chest (B)|Back (C)|Sleeves (D)');
+check('cm row labels', cmGrid.rowLabels.join(','), 'XS,S,M,L,XL,XXL');
+check('cm unit from cells', UB.chart.inferUnit(cmItems), 'cm');
+check('cm pick for 57cm chest', cmGrid.rowLabels[UB.chart.pickSize(cmGrid, { chest: 570 }, ['chest']).row], 'S');
 
-UB.chart.attachLabels(grid, labels);
-check('headers read', grid.headers.join('|'), 'Shoulders (A)|Chest (B)|Back (C)|Sleeves (D)');
-check('row labels read', grid.rowLabels.join(','), 'XS,S,M,L,XL,XXL');
+/* 3. Sizes across the top, bare fractional inches ------------------------ */
+// The layout in the screenshot: measurements down the side, sizes along the top.
+const TCOL = [440, 660, 870, 1090];
+const TROW = [82, 152, 227, 299];
+const TDATA = [
+  ['22', '23', '24', '25 1/2'],       // LENGTH
+  ['23', '24 1/4', '25 1/4', '26 1/2'], // CHEST
+  ['20', '21', '20 1/2', '22 1/2'],   // SHOULDER
+  ['21 1/2', '22 1/2', '22 3/4', '23'], // SLEEVE
+];
+const tItems = [];
+TDATA.forEach((row, r) => row.forEach((v, c) => tItems.push(cell(v, TCOL[c], TROW[r], 46))));
+const tLabels = [
+  ...['S', 'M', 'L', 'XL'].map((t, i) => ({ text: t, rect: rect(TCOL[i], 12, 18) })),
+  ...['LENGTH', 'CHEST', 'SHOULDER', 'SLEEVE'].map((t, i) => ({ text: t, rect: rect(10, TROW[i], 140) })),
+];
 
-check('role: chest', UB.chart.columnRole('Chest (B)'), 'chest');
-check('role: shoulders', UB.chart.columnRole('Shoulders (A)'), 'shoulders');
-check('role: french chest', UB.chart.columnRole('Tour de poitrine'), 'chest');
-check('role: none', UB.chart.columnRole('Sleeves (D)'), 'sleeve');
+const tRaw = UB.chart.buildGrid(tItems);
+check('transposed detected', tRaw.transposed, true);
+check('ordered across, not down', tRaw.down < tRaw.across, true);
+const tGrid = UB.chart.orient(UB.chart.attachLabels(tRaw, tLabels));
+check('transposed rows are sizes', tGrid.rowLabels.join(','), 'S,M,L,XL');
+check('transposed headers are measurements', tGrid.headers.join(','), 'LENGTH,CHEST,SHOULDER,SLEEVE');
+check('transposed cell count', tGrid.cells.length * tGrid.cells[0].length, 16);
+check('transposed roles', tGrid.headers.map(UB.chart.columnRole).join(','), 'length,chest,shoulders,sleeve');
 
-// Chest column is 54/57/60/63/67/71cm. The pick is the first row that is not
-// smaller than you, which is how you read a flat-measurement chart.
-const pick = UB.chart.pickSize(grid, { chest: 570 });
-check('exact 57 picks S', grid.rowLabels[pick.row], 'S');
-check('pick column is chest', pick.col, 1);
-check('pick reports the role', pick.role, 'chest');
-check('58.5 picks M', grid.rowLabels[UB.chart.pickSize(grid, { chest: 585 }).row], 'M');
-check('64 picks XL', grid.rowLabels[UB.chart.pickSize(grid, { chest: 640 }).row], 'XL');
-check('tiny chest picks XS', grid.rowLabels[UB.chart.pickSize(grid, { chest: 500 }).row], 'XS');
-check('shoulders used when no chest', UB.chart.pickSize(grid, { shoulders: 530 }).col, 0);
-check('huge chest picks largest', UB.chart.pickSize(grid, { chest: 900 }).over, true);
-check('no measurements, no pick', UB.chart.pickSize(grid, {}), null);
-
-// Rejections: prose, not a chart.
-check('two values is not a chart', UB.chart.buildGrid(items.slice(0, 2)), null);
+check('bare values look like a chart', UB.chart.looksLikeSizes(tGrid.rowLabels), true);
+check('headers look like measurements', UB.chart.looksLikeMeasurements(tGrid.headers), true);
+check('unit inferred from magnitude', UB.chart.inferUnit(tItems), 'in');
+check('unit applied to bare cells', UB.chart.applyUnit(tItems, 'in'), true);
+check('bare cell now has mm', Math.round(tGrid.cells[3][1].mm * 10) / 10, Math.round(26.5 * 25.4 * 10) / 10);
 check(
-  'one column is not a chart',
-  UB.chart.buildGrid(ROWS.map((top, i) => cm(40 + i, 720, top))),
-  null
-);
-check(
-  'scattered prose is not a chart',
-  UB.chart.buildGrid([cm(20, 100, 100), cm(30, 700, 140), cm(40, 250, 800), cm(5, 900, 1200), cm(8, 130, 1500), cm(9, 640, 1900)]),
-  null
+  'pick for a 24.5in chest',
+  tGrid.rowLabels[UB.chart.pickSize(tGrid, { chest: 24.5 * 25.4 }, ['chest']).row],
+  'L'
 );
 
-// A grid where the columns are ragged (divs, not a table) still reconstructs.
-const ragged = [];
-DATA.forEach((row, r) =>
-  row.forEach((v, c) => ragged.push(cm(v, COLS[c] + (r % 2 ? 7 : -6), ROWS[r] + (c % 2 ? 2 : -3))))
-);
-const rg = UB.chart.buildGrid(ragged);
-check('ragged rows', rg && rg.cells.length, 6);
-check('ragged cols', rg && rg.colBands.length, 4);
-check('ragged fill', rg && rg.filled, 24);
+/* 4. Unit inference ------------------------------------------------------ */
+const bare = (v) => ({ value: v, unit: null, mm: null, rect: rect(0, 0) });
+check('text says inches', UB.chart.inferUnit([bare(50)], 'All measurements in inches'), 'in');
+check('text says cm', UB.chart.inferUnit([bare(20)], 'Toutes les mesures en cm'), 'cm');
+check('text says mm', UB.chart.inferUnit([bare(20)], 'thickness in mm'), 'mm');
+check('inch magnitudes', UB.chart.inferUnit([bare(21), bare(23), bare(25)]), 'in');
+check('cm magnitudes', UB.chart.inferUnit([bare(47), bare(54), bare(58)]), 'cm');
+check('ambiguous magnitudes give up', UB.chart.inferUnit([bare(38), bare(40), bare(42)]), null);
+check('explicit units win over text', UB.chart.inferUnit(cmItems, 'measurements in inches'), 'cm');
 
-// The rule that keeps a grid of product cards from reading as a chart.
-check('monotonic columns recorded', grid.monotonic, 1);
+/* 5. Size-label shapes --------------------------------------------------- */
+check('letter sizes', UB.chart.looksLikeSizes(['XS', 'S', 'M', 'L', 'XL', 'XXL']), true);
+check('numeric sizes', UB.chart.looksLikeSizes(['36', '38', '40', '42']), true);
+check('2XL style', UB.chart.looksLikeSizes(['M', 'L', '2XL', '3XL']), true);
+check('prose is not sizes', UB.chart.looksLikeSizes(['Free shipping', 'Returns', 'Delivery']), false);
+check('one label is not enough', UB.chart.looksLikeSizes(['M']), false);
+
+/* 6. What must not be read as a chart ------------------------------------ */
 const jumbled = [];
 [[47, 12, 58], [9, 71, 3], [53, 40, 62], [18, 63, 7], [61, 22, 66]].forEach((row, r) =>
-  row.forEach((v, c) => jumbled.push(cm(v, COLS[c], ROWS[r])))
+  row.forEach((v, c) => jumbled.push(cell(`${v}cm`, COLS[c], ROWS[r])))
 );
 check('jumbled grid rejected', UB.chart.buildGrid(jumbled), null);
 
-// Product cards: three measurements per card, cards laid out in a grid.
 const cards = [];
 [[108, 63.5, 2.5], [81, 84, 28.5], [46, 14, 200], [55, 40, 23]].forEach((card, i) =>
-  card.forEach((v, c) => cards.push(cm(v, 200 + (i % 2) * 400 + c * 90, 300 + Math.floor(i / 2) * 220)))
+  card.forEach((v, c) => cards.push(cell(`${v}cm`, 200 + (i % 2) * 400 + c * 90, 300 + Math.floor(i / 2) * 220)))
 );
 check('product cards rejected', UB.chart.buildGrid(cards), null);
+check('single column rejected', UB.chart.buildGrid(ROWS.map((top, i) => cell(`${40 + i}cm`, 720, top))), null);
+check('two cells rejected', UB.chart.buildGrid(cmItems.slice(0, 2)), null);
 
-// A descending chart (some charts list XXL first) is still a chart.
 const descending = [];
-[...DATA].reverse().forEach((row, r) => row.forEach((v, c) => descending.push(cm(v, COLS[c], ROWS[r]))));
+[...DATA].reverse().forEach((row, r) => row.forEach((v, c) => descending.push(cell(`${v}cm`, COLS[c], ROWS[r]))));
 check('descending chart accepted', UB.chart.buildGrid(descending).cells.length, 6);
+
+/* 7. Ragged columns (divs, not a table) still reconstruct ---------------- */
+const ragged = [];
+DATA.forEach((row, r) =>
+  row.forEach((v, c) => ragged.push(cell(`${v}cm`, COLS[c] + (r % 2 ? 7 : -6), ROWS[r] + (c % 2 ? 2 : -3))))
+);
+const rg = UB.chart.buildGrid(ragged);
+check('ragged rows', rg && rg.cells.length, 6);
+check('ragged cols', rg && rg.cells[0].length, 4);
+check('ragged fill', rg && rg.filled, 24);
+
+/* 8. Fit verdicts -------------------------------------------------------- */
+check('chest 2in over is boxy', UB.fit.verdict('chest', 2 * 25.4).text, 'boxy');
+check('chest exact is spot on', UB.fit.verdict('chest', 0).text, 'spot on');
+check('chest 1in under is too tight', UB.fit.verdict('chest', -25.4).text, 'too tight');
+check('chest slightly under is snug', UB.fit.verdict('chest', -8).text, 'snug');
+check('chest 1in over is roomy', UB.fit.verdict('chest', 25.4).text, 'roomy');
+check('shoulders 1.5in over is dropped', UB.fit.verdict('shoulders', 38).text, 'dropped shoulder');
+check('shoulders 0.2in over is spot on', UB.fit.verdict('shoulders', 5).text, 'spot on');
+check('sleeve 1in short', UB.fit.verdict('sleeve', -25.4).text, 'too short');
+check('sleeve 2in long', UB.fit.verdict('sleeve', 50).text, 'too long');
+check('inseam uses length scale', UB.fit.verdict('inseam', 0).family, 'length');
+check('neck has its own scale', UB.fit.verdict('neck', -8).text, 'too tight');
+check('unknown role has no verdict', UB.fit.verdict('elbow', 0), null);
+check('diff formats in inches', UB.fit.formatDiff(2 * 25.4, 'in'), '+2″');
+check('diff formats in cm', UB.fit.formatDiff(-15, 'cm'), '−1.5 cm');
+check('zero diff', UB.fit.formatDiff(0, 'in'), '±0″');
+
+/* 9. Profile detection --------------------------------------------------- */
+check('inseam column means pants', UB.fit.detectProfile(['Waist', 'Inseam'], 'Corduroy'), 'pants');
+check('jacket from the page', UB.fit.detectProfile(['Chest', 'Shoulders'], 'Wool Chore Jacket'), 'jackets');
+check('tee from the page', UB.fit.detectProfile(['Chest', 'Shoulders'], 'The Best Pocket Tee'), 'tops');
+check('jeans from the page', UB.fit.detectProfile([], 'Slim Fit Jeans'), 'pants');
+check('waist and seat only', UB.fit.detectProfile(['Waist', 'Seat'], ''), 'pants');
 
 console.log(`${pass} passed, ${fails.length} failed`);
 if (fails.length) {
-  console.log('\n' + fails.map((f) => '  ✗ ' + f).join('\n'));
+  console.log('\n' + fails.slice(0, 25).map((f) => '  ✗ ' + f).join('\n'));
   process.exit(1);
 }

@@ -349,7 +349,7 @@
       chart,
       unit: same ? state.unit : chart.targetUnit,
       pos: same ? state.pos : null,
-      collapsed: same ? state.collapsed : false,
+      collapsed: same ? state.collapsed : chart.autoOpen === false,
     };
     render();
   }

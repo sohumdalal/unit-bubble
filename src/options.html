@@ -2,34 +2,73 @@
 <meta charset="utf-8" />
 <title>Unit Bubble — Settings</title>
 <link rel="stylesheet" href="ui.css" />
+<link rel="stylesheet" href="content.css" />
 <style>
-  body { padding: 40px 24px 64px; }
-  main { max-width: 520px; margin: 0 auto; display: grid; gap: 26px; }
-  header { display: grid; gap: 6px; }
-  header .row { gap: 8px; }
-  h1 { font-size: 17px; }
-  section { display: grid; gap: 14px; }
-  h2 { margin: 0; font-size: 11px; font-weight: 590; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 14px; }
-  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-  .fields .lbl { white-space: nowrap; }
-  .fields input::placeholder { font-size: 11px; }
-  code { font-size: 11.5px; background: var(--panel); padding: 1px 4px; border-radius: 4px; }
-  .triple { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  body { padding: 0 24px 80px; }
+  main { max-width: 640px; margin: 0 auto; }
+  header {
+    position: sticky; top: 0; z-index: 5; margin: 0 -24px 28px; padding: 22px 24px 18px;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  header .top { display: flex; align-items: center; gap: 10px; }
+  header h1 { font-size: 16px; flex: 1 1 auto; }
+  .sample {
+    margin: 12px 0 0; padding: 11px 13px; border-radius: 10px; background: var(--panel);
+    border: 1px solid var(--line); font-size: 13.5px; line-height: 2.1;
+  }
+  section { margin-bottom: 30px; }
+  h2 {
+    margin: 0 0 10px; font-size: 11px; font-weight: 500; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+  h2 em { text-transform: none; letter-spacing: 0; font-style: normal; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 15px; display: grid; gap: 15px;
+  }
+  .card + .card { margin-top: 12px; }
   .card select, .card input, .card textarea { background: var(--bg); }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+  .triple { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(146px, 1fr)); gap: 13px; }
+  .fields input::placeholder { font-size: 10.5px; }
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .toggle p { margin: 2px 0 0; font-size: 11.5px; color: var(--ink-faint); }
+  .toggle > div { min-width: 0; }
+  code {
+    font-size: 11.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--bg); padding: 1px 5px; border-radius: 4px;
+  }
+  .rates { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px 14px; }
+  .rates div { font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .rates strong { color: var(--ink); font-weight: 500; }
+  .hosts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .host {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 9px;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 999px; font-size: 11.5px;
+  }
+  .host button { border: 0; background: none; padding: 0 2px; color: var(--ink-faint); cursor: pointer; font-size: 13px; }
+  .host button:hover { color: var(--ink); }
+  .addrow { display: flex; gap: 8px; }
+  .addrow input { flex: 1 1 auto; }
   .saved { color: var(--accent); font-size: 11px; opacity: 0; transition: opacity .2s ease; }
   .saved.on { opacity: 1; }
-  .preview { display: flex; align-items: center; gap: 10px; font-size: 13px; }
-  .chip {
-    padding: 6px 9px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line);
-    font-variant-numeric: tabular-nums; font-weight: 550;
-  }
+  .footrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .footrow a { color: var(--accent); text-decoration: none; font-size: 11.5px; }
+  .footrow a:hover { text-decoration: underline; }
+  .danger { color: #ff3b30; border-color: color-mix(in srgb, #ff3b30 30%, transparent); }
 </style>
 <main>
   <header>
-    <div class="row"><i class="mark"></i><h1>Unit Bubble</h1></div>
-    <p class="muted" style="margin:0">Hover a price or a measurement on any page. The bubble shows it in the units you picked — nothing is sent anywhere except the daily exchange-rate fetch.</p>
+    <div class="top">
+      <i class="mark"></i>
+      <h1>Unit Bubble</h1>
+      <span class="saved" id="saved">Saved</span>
+      <label class="switch" title="Extension on"><input type="checkbox" id="enabled" /><span></span></label>
+    </div>
+    <p class="sample" id="sample"></p>
   </header>
 
   <section>
@@ -46,18 +85,57 @@
           <select id="currency"></select>
         </label>
       </div>
-      <div class="preview">
-        <span class="lbl">Preview</span>
-        <span class="chip" id="pv-len">—</span>
-        <span class="chip" id="pv-cur">—</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Chips</h2>
+    <div class="card">
+      <div class="toggle">
+        <div><span>On prices</span><p>€65.00 → your currency, wherever a price appears.</p></div>
+        <label class="switch"><input type="checkbox" id="chipPrices" /><span></span></label>
+      </div>
+      <hr class="sep" />
+      <div class="toggle">
+        <div><span>On measurements</span><p>63.5 cm → your unit, in copy and spec tables.</p></div>
+        <label class="switch"><input type="checkbox" id="chipMeasurements" /><span></span></label>
+      </div>
+      <hr class="sep" />
+      <div class="toggle">
+        <div><span>Underline the original</span><p>A dotted line under the value the chip converts.</p></div>
+        <label class="switch"><input type="checkbox" id="underline" /><span></span></label>
       </div>
     </div>
   </section>
 
   <section>
+    <h2>Size charts</h2>
+    <div class="card">
+      <div class="toggle">
+        <div><span>Open the panel automatically</span><p>Off means a small pill you tap to open it.</p></div>
+        <label class="switch"><input type="checkbox" id="chartAuto" /><span></span></label>
+      </div>
+      <hr class="sep" />
+      <div class="toggle">
+        <div><span>Highlight my size</span><p>Marks the first row that isn't smaller than you.</p></div>
+        <label class="switch"><input type="checkbox" id="chartHighlight" /><span></span></label>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Your measurements <em>— optional, used by size charts</em></h2>
+    <p class="muted" style="margin:-4px 0 12px">Measure something you already own that fits the way you want, laid
+      flat, the way a chart measures it. The panel then highlights the matching row and, on hover, tells you how far
+      off each size is. Kept per garment type, since a chest that's right for a tee is wrong for a jacket you layer
+      under. Type <code>22</code> for <span id="unit-word">inches</span>, or <code>56cm</code> to be explicit.</p>
+    <div id="profiles"></div>
+  </section>
+
+  <section>
     <h2>Ambiguous symbols</h2>
     <div class="card">
-      <p class="muted" style="margin:0">Several countries share these. Pick what they should mean when a page doesn't say.</p>
+      <p class="muted" style="margin:0">Several countries share these. Pick what they mean when a page doesn't say.</p>
       <div class="triple">
         <label class="field"><span class="lbl">“$” means</span><select id="dollarMeans"></select></label>
         <label class="field"><span class="lbl">“¥” means</span><select id="yenMeans"></select></label>
@@ -67,47 +145,45 @@
   </section>
 
   <section>
-    <h2>Your measurements <span class="muted" style="text-transform:none;letter-spacing:0">— optional</span></h2>
-    <p class="muted" style="margin:-6px 0 0">Size charts list garments measured flat. Measure something you already
-      own that fits the way you want, the same way, and the panel will highlight the matching row and tell you how
-      each size differs. Kept per garment type, since a chest that's right for a tee is wrong for a jacket you
-      layer under. Type <code>22</code> for <span id="unit-word">inches</span>, or <code>56cm</code> to be explicit.</p>
-    <div id="profiles"></div>
-  </section>
-
-  <section>
-    <h2>Behaviour</h2>
+    <h2>Sites</h2>
     <div class="card">
-      <div class="row between">
-        <span>Underline the original value</span>
-        <label class="switch"><input type="checkbox" id="underline" /><span></span></label>
-      </div>
-      <hr class="sep" />
-      <div class="row between">
-        <span>Extension on</span>
-        <label class="switch"><input type="checkbox" id="enabled" /><span></span></label>
-      </div>
-      <hr class="sep" />
-      <label class="field"><span class="lbl">Never run on these sites — one domain per line</span>
-        <textarea id="disabledHosts" spellcheck="false" placeholder="docs.google.com&#10;mail.google.com"></textarea>
+      <label class="field"><span class="lbl">Never run on</span>
+        <div class="hosts" id="hosts"></div>
       </label>
+      <div class="addrow">
+        <input type="text" id="addhost" placeholder="example.com" spellcheck="false" />
+        <button id="addhost-go">Add</button>
+      </div>
     </div>
   </section>
 
   <section>
     <h2>Exchange rates</h2>
     <div class="card">
-      <div class="row between">
+      <div class="footrow">
         <span class="muted" id="rate-status">…</span>
         <button id="refresh">Refresh now</button>
       </div>
+      <hr class="sep" />
+      <div class="rates" id="rate-list"></div>
     </div>
   </section>
 
-  <div class="row between">
-    <span class="saved" id="saved">Saved</span>
-    <span class="muted">v0.2.0</span>
-  </div>
+  <section>
+    <h2>About</h2>
+    <div class="card">
+      <div class="footrow">
+        <span class="muted">Unit Bubble <span id="version"></span> · no analytics, no account, one rate fetch every
+          12 hours</span>
+        <a href="https://github.com/sohumdalal/unit-bubble" target="_blank" rel="noreferrer">Source</a>
+      </div>
+      <hr class="sep" />
+      <div class="footrow">
+        <span class="muted">Put every setting on this page back to its default.</span>
+        <button id="reset" class="danger">Reset</button>
+      </div>
+    </div>
+  </section>
 </main>
 <script src="lib/currencies.js"></script>
 <script src="lib/detect.js"></script>

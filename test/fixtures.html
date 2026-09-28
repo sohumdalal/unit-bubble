@@ -20,6 +20,7 @@
   th { font-weight: 550; color: #6b6b74; font-size: 12px; }
   tr:last-child td { border-bottom: 0; }
   table.chart td, table.chart th { text-align: right; }
+  table.tchart td:first-child, table.tchart th:first-child { font-weight: 600; letter-spacing: .04em; font-size: 12px; }
   table.chart td:first-child, table.chart th:first-child { text-align: left; font-weight: 600; }
   .gridchart {
     display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 18px;
@@ -140,6 +141,39 @@
     <h2>Size chart — injected into a modal on click (like Shopify apps do)</h2>
     <button id="open-chart" type="button">Size Guide</button>
     <div id="modal" hidden></div>
+  </section>
+
+  <section>
+    <h2>Size chart — transposed, bare fractional inches</h2>
+    <table class="chart tchart">
+      <thead><tr><th></th><th>S</th><th>M</th><th>L</th><th>XL</th></tr></thead>
+      <tbody>
+        <tr><td>LENGTH</td><td>22</td><td>23</td><td>24</td><td>25 1/2</td></tr>
+        <tr><td>CHEST</td><td>23</td><td>24 1/4</td><td>25 1/4</td><td>26 1/2</td></tr>
+        <tr><td>SHOULDER</td><td>20</td><td>21</td><td>20 1/2</td><td>22 1/2</td></tr>
+        <tr><td>SLEEVE</td><td>21 1/2</td><td>22 1/2</td><td>22 3/4</td><td>23</td></tr>
+      </tbody>
+    </table>
+    <p class="muted">Measurements in inches. Sizes across the top, no unit in any cell — so the panel has to infer
+      both the orientation and the unit.</p>
+  </section>
+
+  <section>
+    <h2>Size chart — inline SVG</h2>
+    <svg viewBox="0 0 620 190" width="620" style="max-width:100%; font-family: ui-sans-serif, system-ui">
+      <g font-size="13" fill="#6b6b74">
+        <text x="20" y="24">Size</text><text x="150" y="24">Chest</text>
+        <text x="290" y="24">Waist</text><text x="430" y="24">Length</text>
+      </g>
+      <g font-size="14" fill="currentColor">
+        <text x="20" y="60">S</text><text x="150" y="60">96 cm</text><text x="290" y="60">82 cm</text><text x="430" y="60">68 cm</text>
+        <text x="20" y="92">M</text><text x="150" y="92">101 cm</text><text x="290" y="92">87 cm</text><text x="430" y="92">70 cm</text>
+        <text x="20" y="124">L</text><text x="150" y="124">106 cm</text><text x="290" y="124">92 cm</text><text x="430" y="124">72 cm</text>
+        <text x="20" y="156">XL</text><text x="150" y="156">111 cm</text><text x="290" y="156">97 cm</text><text x="430" y="156">74 cm</text>
+      </g>
+    </svg>
+    <p class="muted">Real text with real rectangles — the reader treats it exactly like a table. Nothing may be
+      injected into the SVG itself, or the text stops rendering.</p>
   </section>
 
   <section>

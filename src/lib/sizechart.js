@@ -1,17 +1,21 @@
 // Size-chart reader.
 //
-// Sites render size charts as tables, CSS grids, flex rows, or absolutely
-// positioned divs — and on Shopify the chart is usually injected by an app, so
-// the markup can't be known ahead of time. So this doesn't read markup at all:
-// it takes the measurement values with their on-screen rectangles and clusters
-// them back into a grid. Everything here is pure geometry, which also means it
-// is testable without a browser.
+// Sites render size charts as tables, CSS grids, flex columns, absolutely
+// positioned divs, or inline SVG — and on Shopify the chart is usually injected
+// by an app, so the markup can't be known ahead of time. So this doesn't read
+// markup at all: it takes the numbers with their on-screen rectangles and
+// clusters them back into a grid.
+//
+// It also handles the two things that make a chart unreadable by unit detection
+// alone: charts written transposed (sizes across the top), and charts whose
+// cells are bare numbers with the unit stated once in a heading, or not at all.
+// Everything here is pure geometry and arithmetic, so it is testable without a
+// browser.
 (function (root) {
   const UB = (root.UB = root.UB || {});
 
-  const MIN_ROWS = 3;
-  const MIN_COLS = 2;
-  const MIN_FILL = 0.55; // share of grid slots that must hold a value
+  const MIN_FILL = 0.55;
+  const MIN_ORDER = 0.6; // share of lines that must run in one direction
 
   const mid = (a, b) => (a + b) / 2;
   const median = (xs) => {
@@ -20,7 +24,32 @@
     return s[Math.floor(s.length / 2)];
   };
 
-  // Group values whose rects share a horizontal band.
+  /* ---------- cells ---------- */
+
+  // A chart cell is a number, optionally fractional, optionally carrying its
+  // own unit: "47cm", "25 1/2", "23", '22 3/4"'.
+  const CELL = new RegExp(
+    '^[\\s\\u00a0]*(\\d+[\\s\\u00a0]+\\d+\\s*/\\s*\\d+|\\d+\\s*/\\s*\\d+|\\d+(?:[.,]\\d+)?)' +
+      '[\\s\\u00a0]*(cm|mm|m|in|inch|inches|"|”|″|ft|feet|foot|\'|’|′)?[\\s\\u00a0]*$',
+    'i'
+  );
+
+  function parseCell(text) {
+    const m = String(text).match(CELL);
+    if (!m) return null;
+    const value = UB.detect.parseNumber(m[1]);
+    if (value == null || value <= 0 || value > 100000) return null;
+    const raw = m[2] ? m[2].toLowerCase() : null;
+    const factor = raw ? UB.detect.LENGTH_UNITS[raw] : null;
+    return {
+      value,
+      unit: factor ? UB.detect.normalizeLengthUnit(raw) : null,
+      mm: factor ? value * factor : null,
+    };
+  }
+
+  /* ---------- clustering ---------- */
+
   function clusterRows(items) {
     const rows = [];
     for (const item of [...items].sort((a, b) => a.rect.top - b.rect.top)) {
@@ -39,13 +68,13 @@
     return rows.sort((a, b) => a.center - b.center);
   }
 
-  // Group the same values into vertical bands. Tolerance comes from how wide the
-  // values themselves are, so it scales with the page's font size.
   function clusterCols(items) {
     const w = median(items.map((i) => i.rect.right - i.rect.left)) || 30;
     const tol = Math.max(w * 1.1, 18);
     const cols = [];
-    for (const item of [...items].sort((a, b) => mid(a.rect.left, a.rect.right) - mid(b.rect.left, b.rect.right))) {
+    for (const item of [...items].sort(
+      (a, b) => mid(a.rect.left, a.rect.right) - mid(b.rect.left, b.rect.right)
+    )) {
       const c = mid(item.rect.left, item.rect.right);
       const col = cols.find((k) => Math.abs(k.center - c) <= tol);
       if (col) {
@@ -60,27 +89,35 @@
     return cols.sort((a, b) => a.center - b.center);
   }
 
-  // Share of columns that never change direction. Ties count as ordered, so a
-  // column that repeats a value (common for sleeves) still passes.
-  function monotonicShare(cells, colCount) {
+  // Share of lines that never change direction. Ties count as ordered, so a
+  // column that repeats a value still passes. This is what separates a size
+  // chart from any other grid of numbers: its measurements grow with the sizes.
+  function orderedShare(lines) {
     let ordered = 0;
-    for (let c = 0; c < colCount; c++) {
-      const col = cells.map((row) => row[c]).filter(Boolean).map((i) => i.mm);
-      if (col.length < 3) continue;
-      const up = col.every((v, i) => i === 0 || v >= col[i - 1]);
-      const down = col.every((v, i) => i === 0 || v <= col[i - 1]);
+    let counted = 0;
+    for (const line of lines) {
+      const vals = line.filter(Boolean).map((i) => i.value);
+      if (vals.length < 3) continue;
+      counted += 1;
+      const up = vals.every((v, i) => i === 0 || v >= vals[i - 1]);
+      const down = vals.every((v, i) => i === 0 || v <= vals[i - 1]);
       if (up || down) ordered += 1;
     }
-    return colCount ? ordered / colCount : 0;
+    return counted ? ordered / counted : 0;
   }
 
+  const columnsOf = (cells) => (cells[0] || []).map((_, c) => cells.map((row) => row[c]));
+
   function buildGrid(items) {
-    if (items.length < MIN_ROWS * MIN_COLS) return null;
+    if (items.length < 6) return null;
     const rowBands = clusterRows(items);
     const colBands = clusterCols(items);
-    if (rowBands.length < MIN_ROWS || colBands.length < MIN_COLS) return null;
+    const R = rowBands.length;
+    const C = colBands.length;
+    // Either orientation: at least 3 sizes and 2 measurements.
+    if (!((R >= 3 && C >= 2) || (R >= 2 && C >= 3))) return null;
 
-    const cells = rowBands.map(() => new Array(colBands.length).fill(null));
+    const cells = rowBands.map(() => new Array(C).fill(null));
     let filled = 0;
     rowBands.forEach((row, r) => {
       for (const item of row.items) {
@@ -100,30 +137,44 @@
         }
       }
     });
+    if (filled / (R * C) < MIN_FILL) return null;
 
-    const slots = rowBands.length * colBands.length;
-    if (filled / slots < MIN_FILL) return null;
-
-    // A chart column is one unit throughout; bail if it looks like prose.
-    const units = new Set(items.map((i) => i.unit));
+    const units = new Set(items.map((i) => i.unit).filter(Boolean));
     if (units.size > 2) return null;
 
-    // The real separator between a size chart and any other grid of numbers
-    // (a row of product cards, a spec grid): every column of a size chart
-    // climbs, or falls, as you go down the sizes. Scattered measurements don't.
-    const monotonic = monotonicShare(cells, colBands.length);
-    if (monotonic < 0.6) return null;
+    // A chart read down the columns has sizes as rows; one read across the rows
+    // is transposed, with sizes along the top.
+    const down = orderedShare(columnsOf(cells));
+    const across = orderedShare(cells);
+    if (Math.max(down, across) < MIN_ORDER) return null;
 
-    return { cells, rowBands, colBands, filled, slots, monotonic };
+    return {
+      cells,
+      rowBands,
+      colBands,
+      filled,
+      slots: R * C,
+      ordered: Math.max(down, across),
+      down,
+      across,
+      transposed: across > down,
+    };
   }
 
-  // Headers sit above the first row of values; size labels sit left of the first
-  // column. Both are picked by alignment, not by tag name.
+  /* ---------- labels ---------- */
+
+  function clean(text) {
+    return String(text).replace(/\s+/g, ' ').replace(/[:•·]+$/, '').trim().slice(0, 28);
+  }
+
+  // Headers sit above the first row of values, size labels left of the first
+  // column. Both are picked by alignment, never by tag name. Both sets are
+  // always collected, because which one names the sizes depends on orientation.
   function attachLabels(grid, labels) {
     const firstRow = grid.rowBands[0];
     const firstCol = grid.colBands[0];
 
-    grid.headers = grid.colBands.map((col) => {
+    grid.topLabels = grid.colBands.map((col) => {
       const band = Math.max((col.right - col.left) * 0.9, 30);
       let best = null;
       for (const l of labels) {
@@ -135,7 +186,7 @@
       return best ? clean(best.text) : '';
     });
 
-    grid.rowLabels = grid.rowBands.map((row) => {
+    grid.leftLabels = grid.rowBands.map((row) => {
       let best = null;
       for (const l of labels) {
         const c = mid(l.rect.top, l.rect.bottom);
@@ -146,28 +197,87 @@
       return best ? clean(best.text) : '';
     });
 
-    // Drop a leading label column header like "Size" from the value headers.
     return grid;
   }
 
-  function clean(text) {
-    return String(text).replace(/\s+/g, ' ').replace(/[:•·]+$/, '').trim().slice(0, 28);
+  const transpose = (cells) => (cells[0] || []).map((_, c) => cells.map((row) => row[c]));
+
+  // After this, cells are always [size][measurement], headers name the
+  // measurements and rowLabels name the sizes — whichever way the page wrote it.
+  function orient(grid) {
+    if (grid.transposed) {
+      grid.cells = transpose(grid.cells);
+      grid.headers = grid.leftLabels || [];
+      grid.rowLabels = grid.topLabels || [];
+    } else {
+      grid.headers = grid.topLabels || [];
+      grid.rowLabels = grid.leftLabels || [];
+    }
+    return grid;
   }
 
-  // Which body measurement a column is about, so a saved measurement can be
-  // matched to the right column. Covers the languages I actually shop in.
+  const SIZE_LABEL = /^(?:xx?x?s|s|m|l|xx?x?l|[2-6]x?l|one ?size|os|t?\d{1,3}(?:[.,]\d)?|\d{2}[-/]\d{2}|w\d{2})$/i;
+
+  function looksLikeSizes(labels = []) {
+    const named = labels.filter((l) => l);
+    if (named.length < 2) return false;
+    return named.filter((l) => SIZE_LABEL.test(l.replace(/\s+/g, ''))).length / named.length >= 0.6;
+  }
+
+  function looksLikeMeasurements(labels = []) {
+    const named = labels.filter((l) => l);
+    if (!named.length) return false;
+    return named.filter((l) => columnRole(l)).length / named.length >= 0.5;
+  }
+
+  /* ---------- units ---------- */
+
+  // A chart whose cells carry no unit states it once in a heading, or leaves it
+  // implied. Text first, then magnitude: garment charts in inches sit well
+  // under 40, in centimetres well over it. If it lands in between, give up
+  // rather than guess — a wrong unit is worse than no panel.
+  function inferUnit(items, scopeText = '') {
+    const withUnit = items.filter((i) => i.unit);
+    if (withUnit.length >= items.length / 2) {
+      const counts = {};
+      for (const i of withUnit) counts[i.unit] = (counts[i.unit] || 0) + 1;
+      return Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    }
+    if (/\b(?:inch|inches|in\.)\b|["”″]/.test(scopeText)) return 'in';
+    if (/\b(?:cm|centimet\w*|centimètres?)\b/i.test(scopeText)) return 'cm';
+    if (/\b(?:mm|millimet\w*)\b/i.test(scopeText)) return 'mm';
+    const med = median(items.map((i) => i.value));
+    if (med >= 45) return 'cm';
+    if (med <= 35) return 'in';
+    return null;
+  }
+
+  function applyUnit(items, unit) {
+    const factor = UB.detect.LENGTH_UNITS[unit];
+    if (!factor) return false;
+    for (const item of items) {
+      if (item.mm == null) {
+        item.mm = item.value * factor;
+        item.unit = unit;
+      }
+    }
+    return true;
+  }
+
+  /* ---------- measurement roles ---------- */
+
   const ROLES = [
     ['chest', /chest|bust|poitrine|brust|pecho|petto|torace|bröst/i],
     ['shoulders', /shoulder|épaule|epaule|schulter|hombro|spalle|axel/i],
     ['waist', /waist|taille|bund|cintura|vita|midja/i],
-    ['hips', /hip|hanche|hüfte|cadera|fianchi/i],
+    ['hips', /hip|seat|hanche|hüfte|cadera|fianchi/i],
     ['sleeve', /sleeve|manche|ärmel|manga|manica/i],
     ['inseam', /inseam|inside leg|entrejambe|schritt/i],
     ['neck', /neck|collar|kragen|cuello|colletto|encolure/i],
     ['thigh', /thigh|cuisse|oberschenkel|muslo|coscia/i],
     ['rise', /rise|montant|schritthöhe|tiro/i],
     ['legOpening', /leg opening|hem width|cuff|opening|bas de jambe|ourlet/i],
-    ['length', /length|back|longueur|länge|largo|lunghezza|hem/i],
+    ['length', /length|back|body|longueur|länge|largo|lunghezza|hem/i],
   ];
 
   function columnRole(header) {
@@ -175,8 +285,8 @@
     return null;
   }
 
-  // Smallest row whose value for that column is at least the wearer's own
-  // measurement — how you actually pick a size off a flat-measurement chart.
+  // Smallest size whose value for that column is at least the wearer's own
+  // measurement — how you actually read a flat-measurement chart.
   function pickSize(grid, measurements, priority) {
     if (!grid || !measurements) return null;
     const roles = (grid.headers || []).map(columnRole);
@@ -196,5 +306,20 @@
     return null;
   }
 
-  UB.chart = { buildGrid, attachLabels, columnRole, pickSize, clean, MIN_ROWS, MIN_COLS };
+  UB.chart = {
+    parseCell,
+    buildGrid,
+    attachLabels,
+    orient,
+    transpose,
+    looksLikeSizes,
+    looksLikeMeasurements,
+    inferUnit,
+    applyUnit,
+    columnRole,
+    pickSize,
+    clean,
+    orderedShare,
+    CELL,
+  };
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -51,8 +51,10 @@
   // French/Benelux height shorthand: 1m82 = 1.82 m. Written without spaces, which
   // is what keeps it from colliding with "1 m 82 cm apart".
   const METRE_CM = new RegExp(`(?<![\\w.,])(\\d)m(\\d{1,2})(?![\\w])`, 'g');
+  // A length may be written as a mixed fraction: 25 1/2 in.
+  const LENGTH_NUM = `\\d+[\\s\\u00a0]+\\d+\\s*\\/\\s*\\d+|\\d+\\s*\\/\\s*\\d+|${NUM}`;
   const LENGTH = new RegExp(
-    `(?<![\\w.,$€£¥₹])(${NUM})${SPACE}*(${LENGTH_ALT})(?![\\w])`,
+    `(?<![\\w.,$€£¥₹])(${LENGTH_NUM})${SPACE}*(${LENGTH_ALT})(?![\\w])`,
     'gi'
   );
 
@@ -86,9 +88,17 @@
     );
   }
 
-  // "1,299.00" -> 1299, "1.299,00" -> 1299, "1 299" -> 1299.
+  const FRACTION = /^(\d+)?[\s\u00a0]*(\d+)\s*\/\s*(\d+)$/;
+
+  // "1,299.00" -> 1299, "1.299,00" -> 1299, "1 299" -> 1299, "25 1/2" -> 25.5.
   // hint is a currency code; it only breaks the genuinely ambiguous "1.299" case.
   function parseNumber(raw, hint) {
+    const frac = String(raw).trim().match(FRACTION);
+    if (frac) {
+      const denom = Number(frac[3]);
+      if (!denom) return null;
+      return Number(frac[1] || 0) + Number(frac[2]) / denom;
+    }
     let s = String(raw).replace(/[    \s]/g, '');
     const lastComma = s.lastIndexOf(',');
     const lastDot = s.lastIndexOf('.');
@@ -235,5 +245,5 @@
     return 'ft';
   }
 
-  UB.detect = { findMatches, parseNumber, LENGTH_UNITS, normalizeLengthUnit };
+  UB.detect = { findMatches, parseNumber, LENGTH_UNITS, normalizeLengthUnit, FRACTION };
 })(typeof self !== 'undefined' ? self : globalThis);

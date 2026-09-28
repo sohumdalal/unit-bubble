@@ -44,8 +44,11 @@ length unit and target currency — plus an off switch for the current site.
 | Lengths | Inches | Under 3 ft shows plain inches, above it shows `6′ 0″` |
 | Prices | USD | 45 currencies |
 | `$` means | USD | Also `¥` (JPY or CNY) and `kr` (SEK / NOK / DKK / ISK) |
-| Your measurements | — | Optional; highlights your row in the size-chart panel |
-| Underline originals | off | A dotted underline under the original value, on top of the chip |
+| Chips on prices / on measurements | both on | Either can be turned off on its own |
+| Underline originals | off | A dotted underline under the value the chip converts |
+| Open the panel automatically | on | Off means a pill you tap to open |
+| Highlight my size | on | Needs your measurements |
+| Your measurements | — | Per garment type; drives the highlight and the hover verdicts |
 | Never run on | — | One domain per line |
 
 Values already in your units get no chip, so a US page in inches and dollars
@@ -58,12 +61,32 @@ so charts are handled separately, in `src/lib/sizechart.js`.
 
 The reader doesn't look at markup. On Shopify the chart is usually injected by an
 app (brut-clothing uses Vitals), so it may be a `<table>`, a CSS grid, a row of
-flex columns, or absolutely positioned divs, and none of that is knowable ahead
-of time. Instead it takes every measurement it found, reads the on-screen
-rectangle of each one, and clusters those rectangles back into rows and columns.
-Headers and size labels are then picked up by alignment — whatever sits above a
-column, or left of a row. Chips inside a detected chart are removed, and the
-panel takes over.
+flex columns, absolutely positioned divs, or **inline SVG** — and none of that is
+knowable ahead of time. Instead it takes every number it found, reads the
+on-screen rectangle of each one, and clusters those rectangles back into rows and
+columns. Headers and size labels are then picked up by alignment — whatever sits
+above a column, or left of a row. Chips inside a detected chart are removed, and
+the panel takes over.
+
+Three things that break unit-detection alone, and are handled here:
+
+- **Transposed charts.** Plenty of stores run sizes across the top and
+  measurements down the side. Both directions are tested for order, and the grid
+  is transposed when the rows are the ordered ones — so `cells` is always
+  `[size][measurement]` whichever way the page wrote it.
+- **Bare cells.** `25 1/2`, `23`, `24 1/4` with the unit stated once in a heading
+  or not at all. Mixed fractions parse, and the unit is inferred: explicit units
+  on the cells first, then the chart's own text (`in`, `inches`, `cm`), then
+  magnitude — garment charts in inches sit well under 40, in centimetres well
+  over it. If it lands between 35 and 45 the chart is skipped rather than
+  guessed at, because a wrong unit is worse than no panel.
+- **SVG text.** Real text with real rectangles, so it reads like a table.
+  Nothing is ever injected into an SVG — a `<span>` there stops the text
+  rendering at all.
+
+Because bare numbers are everywhere on a page, a chart with no units in its
+cells must also *look* like a chart: size-shaped row labels (`XS`…`XXL`, `36`,
+`2XL`) or headers that name measurements.
 
 What keeps a grid of product cards from being read as a chart is that **a size
 chart's columns are monotonic**: every column climbs (or falls) as you go down
@@ -137,12 +160,13 @@ src/lib/fit.js         garment profiles, fit verdicts, profile detection
 src/panel.js           the size-chart panel (shadow DOM, draggable, unit toggle)
 src/content.js         text walker, inline chips, chart wiring, the hover bubble
 src/background.js      rate fetch, cache, alarm, message handler
-src/popup.*            toolbar popup
-src/options.*          settings page
+src/popup.*            toolbar popup: the two settings you change while shopping
+src/options.*          settings page: everything, with a live chip sample
 test/detect.test.js     43 assertions on detection and conversion
 test/units.test.js      238 assertions: every unit spelling, every magnitude
 test/currencies.test.js 545 assertions: every code, symbol and locale format
-test/sizechart.test.js  31 assertions on grid reconstruction, fed browser rects
+test/sizechart.test.js  72 assertions: grid reconstruction from browser rects,
+                        orientation, unit inference, fit verdicts
 test/fixtures.html      real-world strings plus three differently-built charts
 tools/make-icons.js    regenerates icons/*.png
 ```
@@ -164,3 +188,6 @@ npm test
   after the code — including when the code sits in its own element.
 - Charts with fewer than 3 sizes, or a single measurement column, don't trip the
   panel — they stay as ordinary chips.
+- A chart that is a **raster image** (PNG/JPEG) can't be read. SVG charts can.
+  Reading pixels would need either a vision model call or a bundled OCR engine;
+  neither is in here.

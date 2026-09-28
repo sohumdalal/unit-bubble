@@ -142,6 +142,9 @@
     const parent = node.parentElement;
     if (!parent) return true;
     if (SKIP_TAGS.has(parent.tagName)) return true;
+    // ownerSVGElement is set on every element inside an <svg>; tagName checks
+    // miss it because SVG tag names are lowercase.
+    if (parent.ownerSVGElement || parent.tagName === 'svg') return true;
     return !!parent.closest(
       '[data-ub-root],[data-ub-chart],[contenteditable=""],[contenteditable="true"],.ub-hit'
     );
@@ -166,6 +169,7 @@
     const text = node.nodeValue;
     const usable = UB.detect
       .findMatches(text, settings)
+      .filter((m) => (m.kind === 'money' ? settings.chipPrices !== false : settings.chipMeasurements !== false))
       .map((m) => ({ m, conv: UB.convert(m, settings, rates) }))
       .filter((x) => x.conv && x.conv.primary);
     if (!usable.length) return 0;
@@ -231,77 +235,28 @@
   /* ---------- size charts ---------- */
 
   const charts = new Map(); // container -> chart
+  const MAX_CELLS = 4000;
+  const CELL_SKIP = new Set([
+    'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'SELECT', 'OPTION', 'IFRAME', 'TEMPLATE', 'HEAD', 'TITLE',
+  ]);
   let chartObserver = null;
-
-  const imperial = (unit) => unit === 'in' || unit === 'ft' || unit === 'ftin';
-
-  // The values' container is usually a <tbody> or a row wrapper, and the column
-  // headers sit outside it. Widen to the nearest ancestor that isn't much
-  // bigger than the chart itself, so "Shoulders (A)" is in scope but the rest
-  // of the page is not.
-  function labelScope(container) {
-    const area = (el) => {
-      const r = el.getBoundingClientRect();
-      return Math.max(r.width * r.height, 1);
-    };
-    const base = area(container);
-    let scope = container;
-    for (let el = container.parentElement, i = 0; el && i < 3; el = el.parentElement, i++) {
-      if (area(el) > base * 3.2) break;
-      scope = el;
-    }
-    return scope;
-  }
-
-  function labelCandidates(container) {
-    const out = [];
-    const walker = document.createTreeWalker(labelScope(container), NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        const t = node.nodeValue && node.nodeValue.trim();
-        if (!t || t.length > 28) return NodeFilter.FILTER_REJECT;
-        const parent = node.parentElement;
-        if (!parent || SKIP_TAGS.has(parent.tagName)) return NodeFilter.FILTER_REJECT;
-        if (parent.closest('.ub-hit,[data-ub-root]')) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
-      },
-    });
-    while (walker.nextNode()) {
-      const node = walker.currentNode;
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      const rect = range.getBoundingClientRect();
-      if (!rect.width && !rect.height) continue;
-      out.push({ text: node.nodeValue.trim(), rect });
-    }
-    return out;
-  }
-
-  // Ancestors that hold enough length values to be a chart, deepest first, so
-  // the tightest container that parses wins over the whole page body.
-  function candidates(hits) {
-    const byEl = new Map();
-    for (const hit of hits) {
-      let el = hit.el.parentElement;
-      for (let depth = 0; el && depth < 10; depth++, el = el.parentElement) {
-        if (!byEl.has(el)) byEl.set(el, { el, depth, items: [] });
-        byEl.get(el).items.push(hit);
-      }
-    }
-    // depth counts steps up from the value, so the smallest depth is the
-    // tightest container. Tightest first: a <tbody> must win over <body>.
-    return [...byEl.values()]
-      .filter((c) => c.items.length >= MIN_CHART_HITS)
-      .sort((a, b) => a.depth - b.depth || b.items.length - a.items.length);
-  }
-
-  // A chart inside a modal or a collapsed panel is in the DOM long before it is
-  // shown, and a hidden element has no rect to cluster. Opening the modal adds
-  // no new text — it only flips visibility — so detection has to be re-armed by
-  // visibility, not by mutation.
   let visibilityWatcher = null;
   let recheckTimer = null;
 
+  const imperial = (unit) => unit === 'in' || unit === 'ft' || unit === 'ftin';
+
+  function rangeRect(node) {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const rect = range.getBoundingClientRect();
+    return rect.width || rect.height ? rect : null;
+  }
+
+  // A chart inside a closed modal or a collapsed panel is in the DOM with no
+  // rectangles to cluster, and opening it flips visibility without adding any
+  // text — so detection has to be re-armed by visibility, not by mutation.
   function watchForVisible(el) {
+    if (!el) return;
     if (!visibilityWatcher) {
       visibilityWatcher = new IntersectionObserver((entries) => {
         let woke = false;
@@ -310,68 +265,148 @@
           visibilityWatcher.unobserve(entry.target);
           woke = true;
         }
-        if (!woke) return;
-        clearTimeout(recheckTimer);
-        recheckTimer = setTimeout(() => detectCharts(), 120);
+        if (woke) queueRecheck();
       });
     }
     visibilityWatcher.observe(el);
   }
 
-  function pageSignal() {
-    const parts = [document.title];
-    const h1 = document.querySelector('h1');
-    if (h1) parts.push(h1.textContent);
-    for (const el of document.querySelectorAll('[class*=breadcrumb] a,[class*=product-type],[itemprop=category]')) {
-      parts.push(el.textContent);
+  function queueRecheck(delay = 120) {
+    clearTimeout(recheckTimer);
+    recheckTimer = setTimeout(() => {
+      try {
+        detectCharts();
+      } catch (err) {
+        console.warn('[Unit Bubble] chart detection failed:', err);
+      }
+    }, delay);
+  }
+
+  // Every short text node in the page, split into numeric cells and everything
+  // else (which becomes a candidate label). SVG text is included here even
+  // though it is never marked, because an SVG chart is real text with real
+  // rectangles — exactly what the reader needs.
+  function collectCells(root) {
+    const cells = [];
+    const labels = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        const text = node.nodeValue;
+        if (!text || !text.trim() || text.length > 40) return NodeFilter.FILTER_REJECT;
+        const parent = node.parentElement;
+        if (!parent || CELL_SKIP.has(parent.tagName)) return NodeFilter.FILTER_REJECT;
+        if (parent.classList && parent.classList.contains('ub-chip')) return NodeFilter.FILTER_REJECT;
+        if (parent.closest('[data-ub-root],[data-ub-chart]')) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    while (cells.length + labels.length < MAX_CELLS && walker.nextNode()) {
+      const node = walker.currentNode;
+      const text = node.nodeValue.trim();
+      const cell = UB.chart.parseCell(text);
+      const rect = rangeRect(node);
+      if (!rect) {
+        if (cell) watchForVisible(node.parentElement);
+        continue;
+      }
+      if (cell) cells.push({ ...cell, rect, node });
+      else if (text.length <= 28) labels.push({ text, rect });
     }
-    return parts.join(' ').slice(0, 400);
+    return { cells, labels };
+  }
+
+  // Ancestors holding enough numeric cells to be a chart, tightest first: depth
+  // counts steps up from a cell, so a <tbody> must win over <body>.
+  function candidates(cells) {
+    const byEl = new Map();
+    for (const cell of cells) {
+      let el = cell.node.parentElement;
+      for (let depth = 0; el && depth < 10; depth++, el = el.parentElement) {
+        if (!byEl.has(el)) byEl.set(el, { el, depth, items: [] });
+        byEl.get(el).items.push(cell);
+      }
+    }
+    return [...byEl.values()]
+      .filter((c) => c.items.length >= 6)
+      .sort((a, b) => a.depth - b.depth || b.items.length - a.items.length);
+  }
+
+  // Labels near the grid, by geometry rather than by DOM ancestry: a header row
+  // usually sits outside the element the values live in.
+  function labelsNear(grid, labels) {
+    const top = grid.rowBands[0].top;
+    const bottom = grid.rowBands[grid.rowBands.length - 1].bottom;
+    const left = grid.colBands[0].left;
+    const right = grid.colBands[grid.colBands.length - 1].right;
+    const padY = Math.max((bottom - top) * 0.5, 80);
+    const padX = Math.max((right - left) * 0.5, 120);
+    return labels.filter(
+      (l) =>
+        l.rect.right > left - padX &&
+        l.rect.left < right + padX &&
+        l.rect.bottom > top - padY &&
+        l.rect.top < bottom + padY
+    );
+  }
+
+  function scopeText(el) {
+    const parts = [el.textContent || ''];
+    let prev = el.previousElementSibling;
+    for (let i = 0; prev && i < 3; prev = prev.previousElementSibling, i++) parts.push(prev.textContent || '');
+    if (el.parentElement) parts.push((el.parentElement.getAttribute('aria-label') || ''));
+    return parts.join(' ').slice(0, 600);
   }
 
   function detectCharts() {
-    const hits = [];
-    for (const el of document.querySelectorAll('.ub-hit[data-ub-kind="length"]')) {
-      if (el.closest('[data-ub-chart]')) continue;
-      const data = readMatch(el);
-      const rect = originalRect(el);
-      if (!data) continue;
-      if (!rect || (!rect.width && !rect.height)) {
-        watchForVisible(el); // hidden for now; try again when it is shown
-        continue;
-      }
-      hits.push({ el, mm: data.mm, unit: data.unit, text: data.text, rect });
-    }
-    if (hits.length < MIN_CHART_HITS) return;
+    if (!active) return;
+    const { cells, labels } = collectCells(document.body);
+    if (cells.length < 6) return;
 
     const accepted = [];
-    for (const cand of candidates(hits)) {
+    for (const cand of candidates(cells)) {
       if (accepted.some((a) => a.contains(cand.el) || cand.el.contains(a))) continue;
 
       const grid = UB.chart.buildGrid(cand.items);
       if (!grid) continue;
 
+      UB.chart.attachLabels(grid, labelsNear(grid, labels));
+      UB.chart.orient(grid);
+
+      // A chart whose cells carry no unit needs stronger evidence that it is a
+      // chart at all, since bare numbers are everywhere on a page.
+      const unitless = cand.items.filter((i) => i.unit).length < cand.items.length / 2;
+      if (unitless && !UB.chart.looksLikeSizes(grid.rowLabels) && !UB.chart.looksLikeMeasurements(grid.headers)) {
+        continue;
+      }
+
+      const unit = UB.chart.inferUnit(cand.items, unitless ? scopeText(cand.el) : '');
+      if (!unit || !UB.chart.applyUnit(cand.items, unit)) continue;
+
       // A chart already in the unit you read needs no panel.
-      const sourceImperial = cand.items.filter((i) => imperial(i.unit)).length > cand.items.length / 2;
+      const sourceImperial = imperial(unit);
       if (sourceImperial === (settings.length === 'in')) continue;
 
-      UB.chart.attachLabels(grid, labelCandidates(cand.el));
-
       const chart = {
-        key: `${cand.depth}:${grid.cells.length}x${grid.colBands.length}:${grid.cells[0]
+        key: `${grid.cells.length}x${grid.cells[0].length}:${grid.cells[0]
           .map((c) => c && Math.round(c.mm))
           .join(',')}`,
         grid,
         roles: (grid.headers || []).map(UB.chart.columnRole),
-        sourceUnit: sourceImperial ? 'in' : 'cm',
+        sourceUnit: sourceImperial ? 'in' : unit,
         targetUnit: settings.length,
         labelHeader: 'Size',
+        unitInferred: unitless,
+        autoOpen: settings.chartAuto !== false,
       };
-      // Which set of measurements this chart is compared against. Inferred from
-      // the chart's own columns and the page's words, switchable in the panel.
+      // Which measurements this chart is compared against. Inferred from the
+      // chart's own columns and the page's words, switchable in the panel.
       chart.setProfile = (id) => {
         chart.profileId = id;
         chart.values = UB.fit.valuesFor(settings, id);
-        chart.pick = UB.chart.pickSize(grid, chart.values, UB.fit.profile(id).primary);
+        chart.pick =
+          settings.chartHighlight === false
+            ? null
+            : UB.chart.pickSize(grid, chart.values, UB.fit.profile(id).primary);
         return chart;
       };
       chart.setProfile(UB.fit.detectProfile(grid.headers, pageSignal()));
@@ -379,7 +414,8 @@
       cand.el.setAttribute('data-ub-chart', '');
       // The panel is the conversion for a chart; chips inside it would be noise.
       for (const item of cand.items) {
-        const chip = item.el.querySelector('.ub-chip');
+        const hit = item.node.parentElement && item.node.parentElement.closest('.ub-hit');
+        const chip = hit && hit.querySelector('.ub-chip');
         if (chip) chip.remove();
       }
       charts.set(cand.el, chart);
@@ -405,6 +441,16 @@
     chartObserver.observe(el);
   }
 
+  function pageSignal() {
+    const parts = [document.title];
+    const h1 = document.querySelector('h1');
+    if (h1) parts.push(h1.textContent);
+    for (const el of document.querySelectorAll('[class*=breadcrumb] a,[class*=product-type],[itemprop=category]')) {
+      parts.push(el.textContent);
+    }
+    return parts.join(' ').slice(0, 400);
+  }
+
   /* ---------- lifecycle ---------- */
 
   let observer = null;
@@ -412,25 +458,18 @@
 
   function pass(root) {
     if (!active) return;
-    let marked = 0;
     for (const node of collect(root || document.body)) {
       try {
-        marked += mark(node);
+        mark(node);
       } catch {
         /* pages move nodes mid-pass; the next pass picks them up */
       }
     }
-    if (marked) {
-      tidyCurrencyCodes();
-      // Charts need layout, so read geometry after the marking writes settle.
-      requestAnimationFrame(() => {
-        try {
-          detectCharts();
-        } catch (err) {
-          console.warn('[Unit Bubble] chart detection failed:', err);
-        }
-      });
-    }
+    tidyCurrencyCodes();
+    // Charts need layout, so read geometry after the marking writes settle.
+    // This runs even when nothing was marked: a chart of bare numbers has
+    // nothing for the marker to mark, and is still a chart.
+    requestAnimationFrame(() => queueRecheck(0));
   }
 
   function queuePass() {
@@ -459,10 +498,7 @@
         if ((r.type === 'childList' && r.addedNodes.length) || r.type === 'characterData') return queuePass();
         if (r.type === 'attributes') recheck = true;
       }
-      if (recheck) {
-        clearTimeout(recheckTimer);
-        recheckTimer = setTimeout(() => detectCharts(), 150);
-      }
+      if (recheck) queueRecheck(150);
     });
     observer.observe(document.documentElement, {
       childList: true,
@@ -501,6 +537,7 @@
     unmark();
     seen = new WeakSet(); // nodes skipped under the old settings may convert now
     pass(document.body);
+    queueRecheck(80);
   }
 
   chrome.storage.sync.get('settings', ({ settings: stored }) => {

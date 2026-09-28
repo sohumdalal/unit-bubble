@@ -1,18 +1,62 @@
 const $ = (id) => document.getElementById(id);
 const D = UB.DEFAULT_SETTINGS;
+
 let settings = { ...D };
 let rates = { ...UB.FALLBACK_RATES };
 
-const FIELDS = ['length', 'currency', 'dollarMeans', 'yenMeans', 'kronaMeans'];
-const unitWord = () => (settings.length === 'in' ? 'inches' : 'centimeters');
+const SELECTS = ['length', 'currency', 'dollarMeans', 'yenMeans', 'kronaMeans'];
+const TOGGLES = ['enabled', 'chipPrices', 'chipMeasurements', 'underline', 'chartAuto', 'chartHighlight'];
+const SAMPLE_RATE_CURRENCIES = ['EUR', 'GBP', 'JPY', 'SEK', 'CHF', 'CAD'];
 
-// One card per garment type, fields from src/lib/fit.js.
+const unitWord = () => (settings.length === 'in' ? 'inches' : 'centimeters');
+const currencyOptions = (codes) =>
+  codes.map((c) => `<option value="${c}">${c} — ${UB.CURRENCIES[c]}</option>`).join('');
+
+/* ---------- saving ---------- */
+
+let savedTimer;
+function save(patch) {
+  settings = { ...settings, ...patch };
+  chrome.storage.sync.set({ settings }, () => {
+    $('saved').classList.add('on');
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => $('saved').classList.remove('on'), 1200);
+  });
+  renderSample();
+}
+
+/* ---------- the live sample ---------- */
+
+// Built from the real converter and styled by content.css, so what you see here
+// is exactly what lands on a page.
+function renderSample() {
+  const price = settings.currency === 'EUR' ? { code: 'USD', value: 65 } : { code: 'EUR', value: 65 };
+  const priceConv = UB.convert({ kind: 'money', ...price }, settings, rates);
+  const lengthMm = settings.length === 'in' ? 635 : 30 * 25.4;
+  const lengthMatch = {
+    kind: 'length',
+    mm: lengthMm,
+    unit: settings.length === 'in' ? 'cm' : 'in',
+  };
+  const lengthConv = UB.convert(lengthMatch, settings, rates);
+  const chip = (text) => `<span class="ub-chip">${text}</span>`;
+  const hit = (original, converted) =>
+    `<span class="ub-hit">${original}${converted ? chip(converted) : ''}</span>`;
+
+  $('sample').innerHTML =
+    `Chest ${hit(UB.format.length(lengthMm, lengthMatch.unit), lengthConv && lengthConv.primary)}, ` +
+    `sleeve ${hit(settings.length === 'in' ? '21 1/2 in' : '54.6 cm', settings.length === 'in' ? null : '21.5 in')} — ` +
+    `${hit(UB.format.money(price.value, price.code), priceConv && priceConv.primary)}`;
+  document.documentElement.classList.toggle('ub-quiet', !settings.underline);
+}
+
+/* ---------- measurements ---------- */
+
 function buildProfiles() {
-  const host = $('profiles');
-  host.innerHTML = UB.fit.PROFILES.map(
+  $('profiles').innerHTML = UB.fit.PROFILES.map(
     (p) => `
-      <div class="card" style="margin-top:12px">
-        <div class="row between">
+      <div class="card">
+        <div class="toggle">
           <strong style="font-weight:500">${p.label}</strong>
           <span class="muted" id="sum-${p.id}"></span>
         </div>
@@ -31,7 +75,7 @@ function buildProfiles() {
       </div>`
   ).join('');
 
-  for (const input of host.querySelectorAll('input')) {
+  for (const input of $('profiles').querySelectorAll('input')) {
     input.onchange = (e) => saveMeasurement(e.target.dataset.profile, e.target.dataset.role, e.target.value);
   }
 }
@@ -40,7 +84,8 @@ function showMeasurements() {
   $('unit-word').textContent = unitWord();
   const inches = settings.length === 'in';
   for (const input of document.querySelectorAll('#profiles input')) {
-    const cm = Number((settings.profiles || {})[input.dataset.profile]?.[input.dataset.role]);
+    const stored = (settings.profiles || {})[input.dataset.profile] || {};
+    const cm = Number(stored[input.dataset.role]);
     input.value = cm > 0 ? UB.format.num(inches ? cm / 2.54 : cm, 1) : '';
   }
   for (const p of UB.fit.PROFILES) {
@@ -49,12 +94,12 @@ function showMeasurements() {
   }
 }
 
-// Accepts "56", "56cm", '22"', "1m82" — a bare number means whichever unit the
-// user reads in. Always stored as cm.
+// Accepts "22", "56cm", '22"', "21 1/2", "1m82" — a bare number means whichever
+// unit you read in. Always stored as cm.
 function parseMeasurement(raw) {
   const text = String(raw).trim();
   if (!text) return '';
-  const bare = /^\d+(?:[.,]\d+)?$/.test(text);
+  const bare = /^\d+(?:[.,]\d+)?$|^\d+\s+\d+\/\d+$|^\d+\/\d+$/.test(text);
   const probe = bare ? `${text} ${settings.length === 'in' ? 'in' : 'cm'}` : text;
   const match = UB.detect.findMatches(probe, settings)[0];
   if (!match || match.kind !== 'length') return null;
@@ -73,7 +118,7 @@ function saveMeasurement(profileId, role, raw) {
 // One-time move from the flat pre-profile measurements.
 function migrate() {
   const old = settings.measurementsCm;
-  if (!old || settings.profiles === undefined) return;
+  if (!old) return;
   const used = Object.values(settings.profiles || {}).some((p) => Object.keys(p || {}).length);
   if (used) return;
   const profiles = { tops: {}, jackets: {}, pants: {} };
@@ -90,41 +135,37 @@ function migrate() {
   if (moved) save({ profiles });
 }
 
-let savedTimer;
-function flashSaved() {
-  $('saved').classList.add('on');
-  clearTimeout(savedTimer);
-  savedTimer = setTimeout(() => $('saved').classList.remove('on'), 1200);
-}
+/* ---------- sites ---------- */
 
-function save(patch) {
-  settings = { ...settings, ...patch };
-  chrome.storage.sync.set({ settings }, flashSaved);
-  preview();
-}
-
-// Accepts "56", "56cm", '22"', "1m82" — a bare number means whichever unit the
-// user reads in. Always stored as cm.
-function parseMeasurement(raw) {
-  const text = String(raw).trim();
-  if (!text) return '';
-  const bare = /^\d+(?:[.,]\d+)?$/.test(text);
-  const probe = bare ? `${text} ${settings.length === 'in' ? 'in' : 'cm'}` : text;
-  const match = UB.detect.findMatches(probe, settings)[0];
-  if (!match || match.kind !== 'length') return null;
-  return Math.round((match.mm / 10) * 10) / 10;
-}
-
-function saveMeasurement(role, raw) {
-  const cm = parseMeasurement(raw);
-  const input = document.getElementById(`m-${role}`);
-  if (cm === null) {
-    input.value = '';
-    return;
+function showHosts() {
+  const hosts = settings.disabledHosts || [];
+  $('hosts').innerHTML = hosts.length
+    ? hosts
+        .map(
+          (h) =>
+            `<span class="host">${h}<button data-host="${h}" title="Remove" aria-label="Remove ${h}">×</button></span>`
+        )
+        .join('')
+    : '<span class="muted">Running everywhere.</span>';
+  for (const button of $('hosts').querySelectorAll('button')) {
+    button.onclick = () => save({ disabledHosts: hosts.filter((h) => h !== button.dataset.host) });
   }
-  save({ measurementsCm: { ...(settings.measurementsCm || {}), [role]: cm } });
-  input.value = cm ? UB.format.num(settings.length === 'in' ? cm / 2.54 : cm, 1) : '';
 }
+
+function addHost() {
+  const clean = $('addhost')
+    .value.trim()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/.*$/, '');
+  if (!clean) return;
+  const next = [...new Set([...(settings.disabledHosts || []), clean])];
+  $('addhost').value = '';
+  save({ disabledHosts: next });
+  showHosts();
+}
+
+/* ---------- rates ---------- */
 
 function rateStatus(entry) {
   if (!entry || !entry.fetchedAt) return 'Using the bundled fallback table — no live fetch yet.';
@@ -133,8 +174,26 @@ function rateStatus(entry) {
   return `Updated ${when} from ${entry.source}.`;
 }
 
+function showRates() {
+  const to = settings.currency;
+  const rows = SAMPLE_RATE_CURRENCIES.filter((c) => c !== to && rates[c] && rates[to]);
+  $('rate-list').innerHTML = rows
+    .map((from) => {
+      const rate = rates[to] / rates[from];
+      return `<div>1 ${from} = <strong>${UB.format.num(rate, rate < 1 ? 4 : rate < 100 ? 3 : 2)}</strong> ${to}</div>`;
+    })
+    .join('');
+}
+
+/* ---------- boot ---------- */
+
 async function init() {
-  fillSelects();
+  $('currency').innerHTML = currencyOptions(Object.keys(UB.CURRENCIES));
+  $('dollarMeans').innerHTML = currencyOptions(UB.AMBIGUOUS['$'].options);
+  $('yenMeans').innerHTML = currencyOptions(UB.AMBIGUOUS['¥'].options);
+  $('kronaMeans').innerHTML = currencyOptions(UB.AMBIGUOUS.kr.options);
+  $('version').textContent = `v${chrome.runtime.getManifest().version}`;
+
   const { settings: stored } = await chrome.storage.sync.get('settings');
   settings = { ...D, ...(stored || {}) };
 
@@ -142,29 +201,30 @@ async function init() {
   if (entry && entry.rates) rates = entry.rates;
   $('rate-status').textContent = rateStatus(entry);
 
-  for (const id of FIELDS) {
+  for (const id of SELECTS) {
     $(id).value = settings[id];
     $(id).onchange = (e) => {
       save({ [id]: e.target.value });
       if (id === 'length') showMeasurements();
+      if (id === 'currency') showRates();
     };
   }
-  for (const id of ['underline', 'enabled']) {
+  for (const id of TOGGLES) {
     $(id).checked = !!settings[id];
     $(id).onchange = (e) => save({ [id]: e.target.checked });
   }
+
   buildProfiles();
   migrate();
   showMeasurements();
+  showHosts();
+  showRates();
+  renderSample();
 
-  $('disabledHosts').value = (settings.disabledHosts || []).join('\n');
-  $('disabledHosts').onchange = (e) =>
-    save({
-      disabledHosts: e.target.value
-        .split('\n')
-        .map((s) => s.trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, ''))
-        .filter(Boolean),
-    });
+  $('addhost-go').onclick = addHost;
+  $('addhost').onkeydown = (e) => {
+    if (e.key === 'Enter') addHost();
+  };
 
   $('refresh').onclick = async () => {
     $('refresh').disabled = true;
@@ -173,10 +233,15 @@ async function init() {
     if (next && next.rates) rates = next.rates;
     $('rate-status').textContent = rateStatus(next);
     $('refresh').disabled = false;
-    preview();
+    showRates();
+    renderSample();
   };
 
-  preview();
+  $('reset').onclick = () => {
+    if (!confirm('Put every setting back to its default? Your measurements are cleared too.')) return;
+    settings = { ...D };
+    chrome.storage.sync.set({ settings }, () => location.reload());
+  };
 }
 
 init();
