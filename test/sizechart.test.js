@@ -211,6 +211,12 @@ for (const text of [
   'Tabella taglie',
   'Tabella delle taglie',
   'Storleksguide',
+  'Measuring Guide',
+  'Measurement Guide',
+  'How to measure',
+  'How To Measure',
+  'Fit & Sizing',
+  'Size + Fit',
 ]) {
   check(`trigger: ${text}`, UB.chart.looksLikeTrigger(text), true);
 }
@@ -222,7 +228,10 @@ for (const text of [
   '',
   'Guide',
   'Shipping & Returns',
+  'Wash Guide',
+  'Care Guide',
   'This size guide explains how we measure every garment we sell, in detail',
+  'Measure the chest at its widest point',
   'Description',
 ]) {
   check(`not a trigger: ${text}`, UB.chart.looksLikeTrigger(text), false);

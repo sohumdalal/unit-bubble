@@ -15,6 +15,7 @@ const ROOT = path.join(__dirname, '..', '..');
 const URL = args.url || 'https://brut-clothing.com/products/the-best-pocket-t-shirt-heather-grey';
 const SETTINGS = {
   ...UB.DEFAULT_SETTINGS,
+  debug: true,
   length: args.length || 'in',
   currency: args.currency || 'USD',
   profiles: { tops: { chest: 57 }, jackets: {}, pants: {} },
@@ -71,7 +72,7 @@ async function main() {
 
   const page = await context.newPage();
   page.on('console', (m) => {
-    if (/unit bubble|ub-/i.test(m.text())) console.log(`   console[${m.type()}] ${m.text().slice(0, 160)}`);
+    if (/unit bubble/i.test(m.text())) console.log(`   ${m.text().slice(0, 1400)}`);
   });
   page.on('pageerror', (e) => console.log(`   pageerror ${String(e.stack || e).split('\n').slice(0, 2).join(' | ').slice(0, 260)}`));
 

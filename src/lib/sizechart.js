@@ -121,6 +121,40 @@
 
   const columnsOf = (cells) => (cells[0] || []).map((_, c) => cells.map((row) => row[c]));
 
+  // Why a set of values is not a grid. Only used for diagnostics.
+  function explain(items) {
+    const rows = clusterRows(items);
+    const cols = clusterCols(items);
+    const cells = rows.map(() => new Array(cols.length).fill(null));
+    let filled = 0;
+    rows.forEach((row, r) => {
+      for (const item of row.items) {
+        const c = mid(item.rect.left, item.rect.right);
+        let best = 0;
+        let bestD = Infinity;
+        cols.forEach((col, i) => {
+          const d = Math.abs(col.center - c);
+          if (d < bestD) {
+            bestD = d;
+            best = i;
+          }
+        });
+        if (!cells[r][best]) {
+          cells[r][best] = item;
+          filled += 1;
+        }
+      }
+    });
+    return {
+      rows: rows.length,
+      cols: cols.length,
+      fill: Math.round((filled / Math.max(rows.length * cols.length, 1)) * 100) / 100,
+      down: Math.round(orderedShare(columnsOf(cells)) * 100) / 100,
+      across: Math.round(orderedShare(cells) * 100) / 100,
+      units: [...new Set(items.map((i) => i.unit).filter(Boolean))],
+    };
+  }
+
   function buildGrid(items) {
     if (items.length < 6) return null;
     const rowBands = clusterRows(items);
@@ -364,8 +398,10 @@
   const TRIGGER = new RegExp(
     '^\\s*(?:' +
       'size\\s*(?:guide|chart|conversion|info|table)|' +
-      '(?:size|sizing)\\s*(?:&|and)\\s*fit|fit\\s*guide|sizing|size\\s*help|' +
-      'measurements?|garment\\s*measurements|' +
+      '(?:size|sizing)\\s*(?:&|and)?\\s*fit|fit\\s*(?:&|and)?\\s*sizing|fit\\s*guide|sizing|size\\s*help|' +
+      // 3sixteen calls it a "Measuring Guide"; others use "How to measure".
+      'measur(?:ing|ement)s?\\s*(?:guide|chart|info)?|garment\\s*measurements|' +
+      'how\\s*to\\s*measure|' +
       'guide\\s*des\\s*tailles|tableau\\s*des\\s*tailles|' +
       'gr(?:ö|oe|o)(?:ß|ss)entabelle|gr(?:ö|oe|o)(?:ß|ss)en|' +
       'gu(?:í|i)a\\s*de\\s*tallas|tabla\\s*de\\s*tallas|' +
@@ -410,5 +446,6 @@
     pickSize,
     clean,
     orderedShare,
+    explain,
   };
 })(typeof self !== 'undefined' ? self : globalThis);

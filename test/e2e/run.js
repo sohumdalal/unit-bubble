@@ -277,6 +277,52 @@ const CASES = [
     },
   },
   {
+    name: 'decoys · a nav link and a hidden duplicate must not win',
+    file: 'decoys.html',
+    settings: CM_EUR,
+    async run(t, page) {
+      let s = await ui(page);
+      t.eq('exactly one button', s.cta, 1);
+      t.ok('and it is visible', s.ctaVisible);
+      const placed = await page.evaluate(() => {
+        const cta = document.querySelector('.ub-cta');
+        return {
+          insideNav: !!cta.closest('nav'),
+          insideDrawer: !!cta.closest('#drawer'),
+          nextToRealGuide: cta.previousElementSibling === document.getElementById('guide') || cta.parentElement === document.getElementById('guide'),
+        };
+      });
+      t.ok('not attached to the nav link', !placed.insideNav);
+      t.ok('not attached inside the collapsed drawer', !placed.insideDrawer);
+      t.ok('attached to the control that opens the chart', placed.nextToRealGuide, JSON.stringify(placed));
+
+      t.ok('the button opens the store guide', await clickCta(page, 1400));
+      t.ok('the store guide opened, not a navigation', await page.evaluate(() => document.getElementById('modal').classList.contains('open')));
+      t.ok('we are still on the same page', page.url().endsWith('decoys.html'));
+      await page.waitForTimeout(900);
+      s = await ui(page);
+      t.eq('the chart was found', s.charts, 1);
+      await clickCta(page);
+      s = await ui(page);
+      t.ok('and the panel opens', s.panel);
+      t.eq('four sizes', s.rows.length, 4);
+      t.noFlashes(s);
+      t.clean(page);
+    },
+  },
+  {
+    name: 'nav-only · a link to another page is not something to open',
+    file: 'nav-only.html',
+    settings: IN_USD,
+    async run(t, page) {
+      const s = await ui(page);
+      t.ok('the measurements still convert', s.chipCount >= 3, `${s.chipCount} chips`);
+      t.eq('no button, because there is nothing to open here', s.cta, 0);
+      t.noFlashes(s);
+      t.clean(page);
+    },
+  },
+  {
     name: 'currencies · every price format on one page',
     file: 'currencies.html',
     settings: IN_USD,

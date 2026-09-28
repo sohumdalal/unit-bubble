@@ -429,7 +429,32 @@
     if (!active) return;
     dropDeadCharts();
     UB.panel.keepAlive();
+    // With debug on, say why each candidate was turned down. A chart that is
+    // never recognised prints nothing otherwise, which is the hardest case to
+    // diagnose.
+    const rejected = settings.debug ? [] : null;
+    const reject = (cand, why, extra) => {
+      if (rejected) {
+        rejected.push(
+          `${cand.el.tagName}.${String(cand.el.className || '').slice(0, 20)}@${cand.depth} ` +
+            `(${cand.items.length} cells): ${why}${extra ? ` ${JSON.stringify(extra)}` : ''}`
+        );
+      }
+    };
     const { cells, labels } = collectCells(document.body);
+    if (settings.debug) {
+      const groups = candidates(cells);
+      console.warn(
+        `[Unit Bubble] pass: ${cells.length} chart-shaped cells, ${labels.length} labels, ` +
+          `${groups.length} candidate containers` +
+          (groups.length
+            ? `\n  top: ${groups
+                .slice(0, 4)
+                .map((c) => `${c.el.tagName}.${String(c.el.className || '').slice(0, 18)}@${c.depth}(${c.items.length})`)
+                .join(' ')}`
+            : '')
+      );
+    }
     if (cells.length < 6) return refreshCta();
 
     const accepted = [];
@@ -437,7 +462,10 @@
       if (accepted.some((a) => a.contains(cand.el) || cand.el.contains(a))) continue;
 
       const grid = UB.chart.buildGrid(cand.items);
-      if (!grid) continue;
+      if (!grid) {
+        reject(cand, 'not a grid', UB.chart.explain ? UB.chart.explain(cand.items) : null);
+        continue;
+      }
 
       const near = labelsNear(grid, labels, overlayScope(cand.el));
       UB.chart.attachLabels(grid, near);
@@ -462,11 +490,18 @@
       // chart at all, since bare numbers are everywhere on a page.
       const unitless = cand.items.filter((i) => i.unit).length < cand.items.length / 2;
       if (unitless && !UB.chart.looksLikeSizes(grid.rowLabels) && !UB.chart.looksLikeMeasurements(grid.headers)) {
+        reject(cand, 'unitless and looks like neither sizes nor measurements', {
+          rowLabels: grid.rowLabels,
+          headers: grid.headers,
+        });
         continue;
       }
 
       const unit = UB.chart.inferUnit(cand.items, unitless ? scopeText(cand.el) : '');
-      if (!unit || !UB.chart.applyUnit(cand.items, unit)) continue;
+      if (!unit || !UB.chart.applyUnit(cand.items, unit)) {
+        reject(cand, 'unit could not be inferred', { unit, values: cand.items.slice(0, 8).map((i) => i.value) });
+        continue;
+      }
 
       const sourceImperial = imperial(unit);
 
@@ -511,6 +546,9 @@
 
     refreshCta();
     flushDeferred();
+    if (rejected && rejected.length && !accepted.length) {
+      console.warn(`[Unit Bubble] no chart from ${rejected.length} candidates:\n  ${rejected.slice(0, 8).join('\n  ')}`);
+    }
   }
 
   // Opening is driven by the chart coming into view. Closing is not: the panel
@@ -607,6 +645,21 @@
     return false;
   }
 
+  // A link to another page is not an opener. 3sixteen's "Measuring Guide" is a
+  // nav link to a separate page, and a button promising the chart in your units
+  // must not navigate away instead.
+  function opensInPlace(el) {
+    if (el.tagName !== 'A') return true;
+    const href = el.getAttribute('href');
+    if (!href || href.startsWith('#') || href.toLowerCase().startsWith('javascript:')) return true;
+    try {
+      const url = new URL(href, location.href);
+      return url.origin === location.origin && url.pathname === location.pathname;
+    } catch {
+      return true;
+    }
+  }
+
   function scanTriggers() {
     const found = [];
     for (const el of document.querySelectorAll('*')) {
@@ -618,15 +671,21 @@
       if (el.classList.contains('ub-cta') || el.closest('[data-ub-root]')) continue;
       const rank = triggerRank(el, ownText(el));
       if (rank === -1) continue;
-      found.push({ el, rank, opens: clickable(el) });
+      const box = el.getBoundingClientRect();
+      found.push({ el, rank, opens: clickable(el) && opensInPlace(el), visible: box.width > 0 && box.height > 0 });
     }
-    return found.sort((a, b) => Number(b.opens) - Number(a.opens) || a.rank - b.rank);
+    // Visible first: stores repeat the same control in a mobile drawer and a
+    // footer, and clicking a hidden copy does nothing at all — which left the
+    // button sitting invisible inside a collapsed menu.
+    return found.sort(
+      (a, b) => Number(b.visible) - Number(a.visible) || Number(b.opens) - Number(a.opens) || a.rank - b.rank
+    );
   }
 
   // The control whose click opens the store's own size guide.
   function bestOpener(triggers = scanTriggers()) {
-    for (const { el, rank, opens } of triggers) {
-      if (!opens || rank > OPENER_MAX_RANK) continue;
+    for (const { el, rank, opens, visible } of triggers) {
+      if (!opens || !visible || rank > OPENER_MAX_RANK) continue;
       // An opener that contains our button is fine and common — the button is
       // appended inside the store's own link. Our click stops at the shadow
       // host, so the link is activated programmatically instead. Clicking the
@@ -704,7 +763,8 @@
     const opener = bestOpener(triggers);
     if (!opener && !ctaChart) return removeCta(); // nothing to open: no dead button
     if (ctaEl && ctaEl.isConnected && ctaAnchor && ctaAnchor.isConnected) return; // already placed
-    const anchor = opener || (triggers[0] && triggers[0].el);
+    const visibleTrigger = triggers.find((t) => t.visible);
+    const anchor = opener || (visibleTrigger && visibleTrigger.el);
     if (!anchor) return removeCta();
     placeCta(anchor, 'inline');
   }

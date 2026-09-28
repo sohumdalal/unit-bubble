@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Heavyweight Tee — Mock Decoy Store</title>
+<link rel="stylesheet" href="_store.css" />
+<main>
+  <h1>HEAVYWEIGHT TEE</h1>
+  <div class="price">$98.00</div>
+
+  <!-- Decoy 1: a nav link to another page. Clicking it would navigate away, so
+       it must never be chosen to open a chart. -->
+  <nav><a class="nav-link" href="/pages/measuring-guide.html">Measuring Guide</a></nav>
+
+  <!-- Decoy 2: the same control repeated inside a collapsed drawer. Clicking a
+       hidden copy does nothing, and the button must not land in there. -->
+  <div id="drawer" style="display:none"><span class="sizeguide" id="hidden-guide">Size Guide</span></div>
+
+  <!-- The real one: visible, opens a chart in place. -->
+  <span class="sizeguide" id="guide">Size Guide</span>
+
+  <div class="modal" id="modal">
+    <div class="sheet">
+      <span class="close" id="close">&#10005;</span>
+      <strong>Size Chart</strong>
+      <table>
+        <thead><tr><th>Size</th><th>Chest</th><th>Shoulder</th><th>Length</th></tr></thead>
+        <tbody>
+          <tr><td>S</td><td>52 cm</td><td>44 cm</td><td>70 cm</td></tr>
+          <tr><td>M</td><td>55 cm</td><td>46 cm</td><td>72 cm</td></tr>
+          <tr><td>L</td><td>58 cm</td><td>48 cm</td><td>74 cm</td></tr>
+          <tr><td>XL</td><td>61 cm</td><td>50 cm</td><td>76 cm</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+<script>
+  const modal = document.getElementById('modal');
+  document.getElementById('guide').addEventListener('click', () => modal.classList.add('open'));
+  document.getElementById('close').addEventListener('click', () => modal.classList.remove('open'));
+</script>

@@ -1,3 +1,28 @@
+### A misdiagnosis worth recording
+
+The last scan reported that 3sixteen's chart "produced 182 correct chips but was
+not recognised as a chart". That was wrong. Driving the page with
+`repro.js --debug` showed **3 chart-shaped cells on the whole page**: those 182
+values are measurements inside prose sentences, not a grid, and they were
+chipped correctly. The product page carries no chart at all — "Measuring Guide"
+is `A.nav-link`, a link to a separate page.
+
+Chasing it still turned up three real bugs:
+
+- **"Measuring Guide" was not a size-guide label.** The patterns knew
+  `measurements` but not `measuring`, so nothing offered to open it. `How to
+  measure` and `Fit & Sizing` were missing too.
+- **A hidden duplicate could win.** Stores repeat the same control in a mobile
+  drawer and a footer; the first in document order was inside a collapsed
+  drawer, so the button was placed where nobody could see it and clicking it did
+  nothing. Visible controls are now preferred — which likely explains a share of
+  "sometimes it shows up, sometimes it doesn't".
+- **A link to another page is not an opener.** Recognising "Measuring Guide"
+  immediately created a worse bug: a button promising the chart in your units
+  that navigates away instead. An `<a>` whose href resolves to a different path
+  is no longer treated as something to open, so a page whose only size-guide
+  control is a nav link correctly gets no button.
+
 # Unit Bubble
 
 A Chrome extension for shopping on sites that don't use your units. Every price
@@ -253,7 +278,7 @@ src/options.*          settings page: everything, with a live chip sample
 test/detect.test.js     43 assertions on detection and conversion
 test/units.test.js      251 assertions: every unit spelling, every magnitude
 test/currencies.test.js 553 assertions: every code, symbol and locale format
-test/sizechart.test.js  138 assertions: grid reconstruction from browser rects,
+test/sizechart.test.js  147 assertions: grid reconstruction from browser rects,
                         orientation, unit inference, fit verdicts, label matching
 test/e2e/*              end-to-end suite and its mock stores — see End to end
 tools/scan/*            scanners for real sites — see Scanning real sites
@@ -280,13 +305,15 @@ HEADED=1 npm run e2e         # watch it happen
 npm run check                # unit suites + end to end
 ```
 
-Eleven mock stores in `test/e2e/sites`, served over real HTTP, each built out of
-a pattern that has actually broken this extension: a chart in a modal opened by
-a bare `<span>`; vulgar fractions and a `$0` placeholder; a transposed chart of
-unitless cells; an SVG chart; a page where nothing exists at `document_idle`; a
-page that re-renders itself every second; a page of prose that must be left
-completely alone; a native modal `<dialog>`; a CSS grid with French labels; and
-one page carrying twelve currency formats at once.
+Thirteen mock stores in `test/e2e/sites`, served over real HTTP, each built out
+of a pattern that has actually broken this extension: a chart in a modal opened
+by a bare `<span>`; vulgar fractions and a `$0` placeholder; a transposed chart
+of unitless cells; an SVG chart; a page where nothing exists at
+`document_idle`; a page that re-renders itself every second; a page of prose
+that must be left completely alone; a native modal `<dialog>`; a CSS grid with
+French labels; a page of decoy controls (a nav link to another page, and a
+hidden duplicate in a collapsed drawer); a page whose only size-guide control is
+a nav link; and one page carrying twelve currency formats at once.
 
 Each case drives the real extension in a real Chromium — clicking the store's
 own controls, our button, the unit toggle, the dismiss — and asserts on the
@@ -304,7 +331,7 @@ assertions are exact rather than dependent on what the live endpoint says today.
 
 ### What the first run found
 
-Eleven cases, 147 checks, and six real bugs in the first two runs:
+Thirteen cases, 170 checks. Six real bugs in the first two runs:
 
 | Bug | Cause |
 | --- | --- |
