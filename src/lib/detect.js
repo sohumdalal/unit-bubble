@@ -28,6 +28,15 @@
   const VULGAR_CLASS = `[${Object.keys(VULGAR).join('')}]`;
   const VULGAR_RE = new RegExp(`^(\\d+)?[\\s\\u00a0]*(${VULGAR_CLASS})$`);
 
+  // A bare quote mark is the only unit that is also ordinary punctuation, so it
+  // needs a plausibility bound. Scanning 1000 real pages turned up 2359 false
+  // positives of exactly one shape: a long number next to a quote — Unix
+  // timestamps ("1775415741\"") and years ("2024'"). Nothing wearable is a
+  // thousand inches, let alone a billion.
+  const QUOTE_UNITS = new Set(['"', '”', '″', "'", '’', '′']);
+  const QUOTE_MAX = 1000;
+  const SANE_MAX_MM = 100000; // 100m: past any garment, sofa or rug
+
   const LENGTH_UNITS = {
     mm: 1, millimeter: 1, millimeters: 1, millimetre: 1, millimetres: 1,
     cm: 10, centimeter: 10, centimeters: 10, centimetre: 10, centimetres: 10,
@@ -176,6 +185,7 @@
       const ft = parseNumber(m[1]);
       const inch = parseNumber(m[2]);
       if (ft == null || inch == null) continue;
+      if (ft * 304.8 + inch * 25.4 > SANE_MAX_MM) continue;
       push(out, {
         kind: 'length',
         start: m.index,
@@ -208,6 +218,8 @@
       const factor = LENGTH_UNITS[unit] ?? LENGTH_UNITS[m[2]];
       const value = parseNumber(m[1]);
       if (!factor || value == null || value === 0) continue;
+      if (QUOTE_UNITS.has(unit) && !(value < QUOTE_MAX)) continue;
+      if (value * factor > SANE_MAX_MM) continue;
       push(out, {
         kind: 'length',
         start: m.index,
@@ -266,5 +278,5 @@
     return 'ft';
   }
 
-  UB.detect = { findMatches, parseNumber, LENGTH_UNITS, normalizeLengthUnit, FRACTION, VULGAR, VULGAR_CLASS };
+  UB.detect = { findMatches, parseNumber, LENGTH_UNITS, normalizeLengthUnit, FRACTION, VULGAR, VULGAR_CLASS, QUOTE_UNITS };
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -53,6 +53,9 @@
     if (value == null || value <= 0 || value > 100000) return null;
     const raw = m[2] ? m[2].toLowerCase() : null;
     const factor = raw ? UB.detect.LENGTH_UNITS[raw] : null;
+    // Same bound as the detector: a quote mark after a long number is
+    // punctuation, not inches.
+    if (raw && UB.detect.QUOTE_UNITS.has(raw) && value >= 1000) return null;
     return {
       value,
       text: String(text).trim(), // the cell as written: the panel shows it back
@@ -272,7 +275,7 @@
       grid.headers = grid.topLabels || [];
       grid.rowLabels = grid.leftLabels || [];
     }
-    return demoteSizeColumn(grid);
+    return dropSizeSystemColumns(demoteSizeColumn(grid));
   }
 
   const SIZE_HEADER = /^(?:size|sizes|taille|talla|tallas|gr(?:ö|oe|o)(?:ß|ss)e|tamanho|misura|taglia|storlek|maat|us|eu|uk)$/i;
@@ -300,6 +303,34 @@
     grid.cells = grid.cells.map((row) => row.slice(1));
     grid.headers = grid.headers.slice(1);
     grid.demotedSizeColumn = true;
+    return grid;
+  }
+
+  // A column of sizes in another country's system is not a measurement. Found
+  // on real stores: a shoe chart of "Size | EU | CM" was converting EU 42 into
+  // inches, which is nonsense dressed up as a conversion.
+  const SIZE_SYSTEM = /^\(?(?:eu|euro|eur|uk|us|usa|jp|jpn|it|ita|fr|de|au|aus|nz|mx|br|cn|kr|int|intl|international)\)?(?:\s*(?:size|sizes|sizing))?\)?$/i;
+
+  function isSizeSystem(header) {
+    const text = String(header || '').trim();
+    if (!text) return false;
+    if (SIZE_SYSTEM.test(text)) return true;
+    return /^(?:usa?|uk|eu|jp|it|fr|de|au|br|cn|kr|intl?)\s*(?:size|sizing)$/i.test(text);
+  }
+
+  // Columns that are neither a measurement nor a size system are unlabelled or
+  // junk; a chart has to keep at least one real measurement column to be worth
+  // showing at all.
+  function dropSizeSystemColumns(grid) {
+    const keep = [];
+    grid.headers.forEach((header, i) => {
+      if (!isSizeSystem(header)) keep.push(i);
+    });
+    if (keep.length === grid.headers.length) return grid;
+    if (!keep.length) return null;
+    grid.headers = keep.map((i) => grid.headers[i]);
+    grid.cells = grid.cells.map((row) => keep.map((i) => row[i]));
+    grid.droppedSizeSystems = true;
     return grid;
   }
 
@@ -440,6 +471,8 @@
     looksLikeSizes,
     looksLikeMeasurements,
     demoteSizeColumn,
+    dropSizeSystemColumns,
+    isSizeSystem,
     inferUnit,
     applyUnit,
     columnRole,

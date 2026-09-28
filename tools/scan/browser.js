@@ -20,6 +20,7 @@
 require('../../src/lib/currencies.js');
 require('../../src/lib/detect.js');
 require('../../src/lib/convert.js');
+require('../../src/lib/sizechart.js');
 
 const fs = require('fs');
 const path = require('path');
@@ -40,6 +41,11 @@ const OUT = args.out || path.join(process.cwd(), 'browser-report.json');
 const SETTLE = Number(args.settle || 3500);
 const SHOTS = path.join(process.cwd(), 'scan-shots');
 
+// Ours, by the files in the stack. Content scripts report as
+// chrome-extension:// frames.
+const OURS = /chrome-extension:\/\/|\b(content|panel|sizechart|fit|detect|convert|currencies)\.js|Unit Bubble/i;
+
+const TRIGGER_SOURCE = UB.chart.TRIGGER.source;
 const RATES = UB.FALLBACK_RATES;
 // Point the extension at units the pages are not already in, and every page
 // converts something. A US store read in USD and inches correctly does nothing,
@@ -52,7 +58,7 @@ const SETTINGS = {
 };
 
 // What the page looks like after the extension has had a go at it.
-function harvest() {
+function harvest(triggerSource) {
   const hits = [...document.querySelectorAll('.ub-hit')].map((hit) => {
     const chip = hit.querySelector('.ub-chip');
     const first = hit.firstChild;
@@ -63,14 +69,23 @@ function harvest() {
       badParent: !!hit.closest('input,textarea,[contenteditable=""],[contenteditable="true"]') || !!hit.ownerSVGElement,
     };
   });
-  const triggerish = [...document.querySelectorAll('a,button,summary,[role="button"]')].some((el) =>
-    /^\s*(size\s*(guide|chart)|guide des tailles|größentabelle)\s*[:>»→]?\s*$/i.test((el.textContent || '').trim())
-  );
+  // The extension's own TRIGGER pattern, passed in, so the scan and the product
+  // agree on what a size-guide label is. A narrower copy reported nine false
+  // failures.
+  const trigger = new RegExp(triggerSource, 'i');
+  const norm = (text) => String(text || '').replace(/[^\p{L}\p{N}&]+/gu, ' ').trim();
+  const triggerish = [...document.querySelectorAll('*')].some((el) => {
+    if (el.children.length > 2) return false;
+    const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.nodeValue).join('');
+    const text = norm(own);
+    return !!text && text.length <= 40 && trigger.test(text);
+  });
   return {
     hits,
     chips: document.querySelectorAll('.ub-chip').length,
     cta: document.querySelectorAll('.ub-cta').length,
     chartMarked: document.querySelectorAll('[data-ub-chart]').length,
+    nested: document.querySelectorAll('.ub-hit .ub-hit, .ub-chip .ub-chip').length,
     panel: !!document.querySelector('[data-ub-root]'),
     triggerish,
     title: document.title.slice(0, 80),
@@ -113,12 +128,21 @@ function checkPage(state, second, errors) {
   // Chips going UP on a second look means something got marked twice. Going
   // down is legitimate: chips inside a detected chart are stripped, because the
   // panel is the conversion there. Only a drop with no chart is a real fault.
-  if (second.chips > state.chips) {
-    problems.push({ why: `marked twice: ${state.chips} → ${second.chips} chips`, text: '' });
-  } else if (second.chips < state.chips && !second.chartMarked) {
-    problems.push({ why: `chips vanished with no chart to explain it: ${state.chips} → ${second.chips}`, text: '' });
+  // Double-marking is a marker inside a marker — not simply "more chips than
+  // before", which is what a page lazy-loading another section looks like.
+  if (second.nested) problems.push({ why: `marked twice: ${second.nested} nested markers`, text: '' });
+  // A drop is only a fault if the chips don't come back: a page that re-renders
+  // its own subtree throws our markers away, and the next pass restores them.
+  if (second.chips < state.chips && !second.chartMarked && !second.recovered) {
+    problems.push({ why: `chips vanished and did not return: ${state.chips} → ${second.chips}`, text: '' });
   }
-  if (state.triggerish && !state.cta) problems.push({ why: 'size-guide control present but no Open Chart button', text: '' });
+  // A button is promised only where there is a chart to deliver, so the
+  // invariant runs the other way: a chart that was read must offer a button,
+  // and a button must never appear with neither a chart nor a control.
+  if (state.chartMarked && !state.cta) problems.push({ why: 'chart read but no Open Chart button', text: '' });
+  if (state.cta && !state.chartMarked && !state.triggerish) {
+    problems.push({ why: 'button shown with neither a chart nor a size-guide control', text: '' });
+  }
   for (const err of errors) problems.push({ why: 'extension logged an error', text: err.slice(0, 200) });
   return problems;
 }
@@ -160,27 +184,109 @@ async function main() {
   for (const [i, url] of urls.entries()) {
     const page = await context.newPage();
     const errors = [];
+    const foreign = [];
     page.on('console', (msg) => {
       const text = msg.text();
       if (msg.type() === 'error' && /unit bubble/i.test(text)) errors.push(text);
     });
-    // Every page error, not just ones that name us: the TypeError that broke
-    // the unit toggle mentioned neither the extension nor any of its symbols,
-    // so a name filter hid it completely.
-    page.on('pageerror', (err) => errors.push(String(err.stack || err).slice(0, 400)));
+    // Capture every page error so nothing can hide — a TypeError that named
+    // neither the extension nor its symbols once stayed hidden for three
+    // rounds — but attribute them. A store's own broken payment script is not
+    // our failure, and counting it as one buries the ones that are.
+    page.on('pageerror', (err) => {
+      const text = String(err.stack || err).slice(0, 400);
+      (OURS.test(text) ? errors : foreign).push(text);
+    });
 
+    const problemsFromPanel = [];
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(SETTLE);
-      const state = await page.evaluate(harvest);
+      let state = await page.evaluate(harvest, TRIGGER_SOURCE);
       await page.waitForTimeout(600);
-      const second = await page.evaluate(harvest);
-      const problems = checkPage(state, second, errors);
-      results.push({ url, ...summarize(state), problems });
+      let second = await page.evaluate(harvest, TRIGGER_SOURCE);
+      if (second.chips < state.chips) {
+        await page.waitForTimeout(1800); // let a re-rendering page recover
+        const third = await page.evaluate(harvest, TRIGGER_SOURCE);
+        second = { ...third, recovered: third.chips >= state.chips };
+      }
+      // Most charts sit behind the store's own modal, so a scan that never
+      // clicks anything can't tell whether the panel works. This is the metric
+      // that matters: of the pages offering a chart, on how many does the
+      // panel actually open with readable rows?
+      // If we offer no button, act like a shopper and open the store's own
+      // guide, then look again. Otherwise the measurement only covers pages
+      // whose chart was already visible.
+      if (!state.cta) {
+        const opened = await page.evaluate(() => {
+          const norm = (t) => String(t || '').replace(/[^\p{L}\p{N}&]+/gu, ' ').trim();
+          const el = [...document.querySelectorAll('*')].find((e) => {
+            if (e.children.length > 2) return false;
+            const own = [...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.nodeValue).join('');
+            if (!/^(size\s*(guide|chart)|measuring\s*guide|size\s*&?\s*fit)$/i.test(norm(own))) return false;
+            const box = e.getBoundingClientRect();
+            return box.width > 0 && box.height > 0;
+          });
+          if (!el) return false;
+          el.click();
+          return true;
+        });
+        if (opened) {
+          await page.waitForTimeout(1800);
+          state = await page.evaluate(harvest, TRIGGER_SOURCE);
+        }
+      }
+
+      let panel = null;
+      if (state.cta) {
+        const clickCtaOnce = () =>
+          page.evaluate(() => {
+            const cta = document.querySelector('.ub-cta');
+            if (cta) cta.click();
+            return !!cta;
+          });
+        const panelOpen = () =>
+          page.evaluate(() =>
+            [...document.querySelectorAll('[data-ub-root]')].some((h) => h.shadowRoot && h.shadowRoot.querySelector('.wrap'))
+          );
+
+        await clickCtaOnce();
+        await page.waitForTimeout(1400);
+        // Only click again if the first click opened the store's guide rather
+        // than our panel. Clicking twice regardless toggled drawer-based stores
+        // shut again, which looked like our chips vanishing.
+        if (!(await panelOpen())) {
+          await clickCtaOnce();
+          await page.waitForTimeout(1400);
+        }
+        panel = await page.evaluate(() => {
+          const host = [...document.querySelectorAll('[data-ub-root]')].find(
+            (h) => h.shadowRoot && h.shadowRoot.querySelector('.wrap')
+          );
+          const wrap = host && host.shadowRoot.querySelector('.wrap');
+          if (!wrap) return { open: false };
+          const rows = [...wrap.querySelectorAll('tbody tr')];
+          return {
+            open: true,
+            rows: rows.length,
+            cols: rows[0] ? rows[0].cells.length : 0,
+            headers: [...wrap.querySelectorAll('thead th')].map((th) => th.textContent.trim()),
+            firstRow: rows[0] ? [...rows[0].cells].map((td) => td.textContent.trim()) : [],
+            emptyCells: rows.reduce((n, tr) => n + [...tr.cells].filter((td) => td.textContent.trim() === '—').length, 0),
+          };
+        });
+        if (panel.open && (!panel.rows || panel.rows < 2)) {
+          problemsFromPanel.push({ why: `panel opened with ${panel.rows} rows`, text: '' });
+        }
+      }
+
+      const problems = checkPage(state, second, errors).concat(problemsFromPanel);
+      results.push({ url, ...summarize(state), panel, foreign: foreign.length, problems });
       const mark = problems.length ? '✗' : state.chips ? '✓' : '·';
       console.log(
-        `${String(i + 1).padStart(3)}/${urls.length} ${mark} ${state.chips} chips` +
-          `${state.cta ? ', cta' : ''}${state.chartMarked ? ', chart' : ''}  ${url}`
+        `${String(i + 1).padStart(3)}/${urls.length} ${mark} ${String(state.chips).padStart(3)} chips` +
+          `${state.cta ? ', cta' : ''}${panel && panel.open ? `, panel ${panel.rows}x${panel.cols}` : ''}` +
+          `${foreign.length ? `, ${foreign.length} site errors` : ''}  ${url.replace(/^https?:\/\//, '').slice(0, 58)}`
       );
       for (const p of problems.slice(0, 3)) console.log(`        ${p.why}${p.text ? `  «${p.text}»` : ''}`);
       if (args.shots && (problems.length || state.chartMarked)) {
@@ -195,12 +301,18 @@ async function main() {
   await context.close();
 
   const withChips = results.filter((r) => r.chips).length;
+  const withCta = results.filter((r) => r.cta).length;
+  const panelOpened = results.filter((r) => r.panel && r.panel.open).length;
   const broken = results.filter((r) => r.problems && r.problems.length);
   fs.writeFileSync(
     OUT,
     JSON.stringify({ ranAt: new Date().toISOString(), totals: { pages: results.length, withChips, broken: broken.length }, results }, null, 2)
   );
-  console.log(`\n${withChips}/${results.length} pages got chips · ${broken.length} with problems`);
+  console.log(
+    `\n${withChips}/${results.length} pages got chips · ` +
+      `${panelOpened}/${withCta} offered a chart and opened the panel · ` +
+      `${broken.length} with problems of ours`
+  );
   console.log(`Full report → ${OUT}`);
   process.exitCode = broken.length ? 1 : 0;
 }

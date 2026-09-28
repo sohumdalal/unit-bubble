@@ -48,3 +48,31 @@ oscarcalcado.com.br
 # KRW / TWD / SGD
 musinsa.com
 oqliq.com
+
+# Added to clear 1000 pages. Spread across storefront platforms and regions;
+# some will refuse a sitemap, which the discovery step reports and moves past.
+allbirds.com
+gymshark.com
+kotn.com
+tentree.com
+outerknown.com
+fahertybrand.com
+marinelayer.com
+huckberry.com
+bombas.com
+wax-london.com
+universalworks.co.uk
+folkclothing.com
+finisterre.com
+spoke-london.com
+drakes.com
+stutterheim.com
+assemblylabel.com
+rowingblazers.com
+alexmill.com
+corridornyc.com
+portuguese-flannel.com
+dehen1920.com
+ironheart.co.uk
+pikebrothers.com
+merzbschwanen.com

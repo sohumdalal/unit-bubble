@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Heavy catalogue — Mock Store</title>
+<link rel="stylesheet" href="_store.css" />
+<main>
+  <h1>HEAVY CATALOGUE</h1>
+  <span class="sizeguide" id="guide">Size Guide</span>
+  <div id="app"></div>
+</main>
+<script>
+  // A deliberately large page: ~9000 nodes, 300 prices and 300 measurements,
+  // plus a real size chart. Built synchronously so every run is identical.
+  const app = document.getElementById('app');
+  const parts = [];
+  for (let i = 0; i < 300; i++) {
+    parts.push(`
+      <section class="card">
+        <h3>Product ${i}</h3>
+        <div class="price">€${(19 + (i % 400)).toFixed(2)}</div>
+        <p>Chest ${50 + (i % 30)} cm, sleeve ${58 + (i % 12)} cm, length ${64 + (i % 10)} cm.</p>
+        <ul><li>Item ${i}A</li><li>Item ${i}B</li><li>Item ${i}C</li><li>Ref ${1000 + i}</li></ul>
+        <div><span>tag</span><span>tag</span><span>tag</span><span>tag</span></div>
+      </section>`);
+  }
+  parts.push(`
+    <table><thead><tr><th>Size</th><th>Chest</th><th>Shoulder</th><th>Sleeve</th></tr></thead><tbody>
+      <tr><td>S</td><td>52 cm</td><td>44 cm</td><td>63 cm</td></tr>
+      <tr><td>M</td><td>55 cm</td><td>46 cm</td><td>64 cm</td></tr>
+      <tr><td>L</td><td>58 cm</td><td>48 cm</td><td>65 cm</td></tr>
+      <tr><td>XL</td><td>61 cm</td><td>50 cm</td><td>66 cm</td></tr>
+    </tbody></table>`);
+  app.innerHTML = parts.join('');
+</script>

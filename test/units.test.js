@@ -132,6 +132,31 @@ check(
   '810,864,3'
 );
 
+/* 7b. Quote marks after long numbers are punctuation -------------------- */
+// 2359 false positives across 1000 real pages, all of this shape.
+for (const text of [
+  '1775415741"',      // a Unix timestamp
+  '1775415741234"',   // in milliseconds
+  "2024'",            // a year with a stray apostrophe
+  '"1234567890"',
+  '9999"',
+  "12345'",
+]) {
+  check(`not a measurement: ${text}`, mm(text), null);
+}
+check('a real inch mark still works', mm('27"'), 685.8);
+check('999 inches is still allowed', mm('999"'), 999 * 25.4);
+check('a real foot mark still works', mm("6'"), 1828.8);
+check('spelled-out units are not capped', mm('5000 mm'), 5000);
+check('but nothing beyond 100m survives', mm('200 m'), null);
+// Feet in a compound height are capped at two digits, so the 100m bound can
+// never fire there; the tallest expressible height still works.
+check(
+  'the tallest compound height still works',
+  mm("99'11\""),
+  Math.round((99 * 304.8 + 11 * 25.4) * 1000) / 1000
+);
+
 /* 8. What must never be read as a measurement --------------------------- */
 for (const text of [
   'ready in 5 minutes',

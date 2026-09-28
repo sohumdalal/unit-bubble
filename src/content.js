@@ -12,6 +12,10 @@
     'IFRAME', 'CANVAS', 'SVG', 'MATH', 'TEMPLATE', 'HEAD', 'TITLE', 'CODE', 'PRE',
   ]);
   const MAX_NODES_PER_PASS = 1200;
+  // Marks per slice. A catalogue page with 300 products wants 1200 chips, and
+  // doing them in one go produced a single 55ms task — right at the threshold
+  // where a browser calls it a long task. Slices keep every one of them short.
+  const MARK_BUDGET = 220;
   const MIN_CHART_HITS = UB.chart.MIN_ROWS * UB.chart.MIN_COLS;
 
   let settings = { ...UB.DEFAULT_SETTINGS };
@@ -332,6 +336,7 @@
   function collectCells(root) {
     const cells = [];
     const labels = [];
+    let hidden = 0;
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const text = node.nodeValue;
@@ -342,6 +347,9 @@
           return NodeFilter.FILTER_REJECT;
         }
         if (parent.closest('[data-ub-root],[data-ub-chart],.ub-cta')) return NodeFilter.FILTER_REJECT;
+        // Text belonging to a control is not a column header. A store's
+        // "Where are we shipping to?" select label was being read as one.
+        if (parent.closest('select,option,optgroup,button,label,fieldset,legend')) return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       },
     });
@@ -351,13 +359,16 @@
       const cell = UB.chart.parseCell(text);
       const rect = rangeRect(node);
       if (!rect) {
-        if (cell) watchForVisible(node.parentElement);
+        if (cell) {
+          hidden += 1;
+          watchForVisible(node.parentElement);
+        }
         continue;
       }
       if (cell) cells.push({ ...cell, rect, node });
       else if (text.length <= 28) labels.push({ text, rect, el: node.parentElement });
     }
-    return { cells, labels };
+    return { cells, labels, hidden };
   }
 
   // Ancestors holding enough numeric cells to be a chart, tightest first: depth
@@ -405,15 +416,24 @@
     const bottom = grid.rowBands[grid.rowBands.length - 1].bottom;
     const left = grid.colBands[0].left;
     const right = grid.colBands[grid.colBands.length - 1].right;
-    const padY = Math.max((bottom - top) * 0.5, 80);
-    const padX = Math.max((right - left) * 0.5, 120);
+    // Generous to the left and above, because that is where labels live: a
+    // symmetric window sized on the grid excluded a "Size" column sitting
+    // 300px to its left. Pulling in too much is harmless — attachLabels still
+    // requires a header to sit above its column and a row label to its left,
+    // and `scope` keeps a modal from reading the page behind it.
+    const width = right - left;
+    const height = bottom - top;
+    const padLeft = Math.max(width, 700);
+    const padRight = Math.max(width * 0.5, 200);
+    const padTop = Math.max(height * 0.5, 200);
+    const padBottom = Math.max(height * 0.25, 80);
     return labels.filter(
       (l) =>
         (!scope || scope.contains(l.el)) &&
-        l.rect.right > left - padX &&
-        l.rect.left < right + padX &&
-        l.rect.bottom > top - padY &&
-        l.rect.top < bottom + padY
+        l.rect.right > left - padLeft &&
+        l.rect.left < right + padRight &&
+        l.rect.bottom > top - padTop &&
+        l.rect.top < bottom + padBottom
     );
   }
 
@@ -427,6 +447,9 @@
 
   function detectCharts() {
     if (!active) return;
+    const T = settings.debug ? [] : null;
+    const mark0 = performance.now();
+    const lap = (name) => T && T.push(`${name} ${Math.round(performance.now() - mark0)}ms`);
     dropDeadCharts();
     UB.panel.keepAlive();
     // With debug on, say why each candidate was turned down. A chart that is
@@ -441,7 +464,9 @@
         );
       }
     };
-    const { cells, labels } = collectCells(document.body);
+    const { cells, labels, hidden } = collectCells(document.body);
+    hiddenCells = hidden;
+    lap('collectCells');
     if (settings.debug) {
       const groups = candidates(cells);
       console.warn(
@@ -455,7 +480,12 @@
             : '')
       );
     }
-    if (cells.length < 6) return refreshCta();
+    if (cells.length < 6) {
+      refreshCta();
+      lap('refreshCta');
+      if (T) console.warn(`[Unit Bubble] timing (no chart): ${T.join(' | ')}`);
+      return;
+    }
 
     const accepted = [];
     for (const cand of candidates(cells)) {
@@ -469,7 +499,10 @@
 
       const near = labelsNear(grid, labels, overlayScope(cand.el));
       UB.chart.attachLabels(grid, near);
-      UB.chart.orient(grid);
+      if (!UB.chart.orient(grid)) {
+        reject(cand, 'no measurement columns, only size systems', { headers: grid.headers });
+        continue;
+      }
       if (settings.debug) {
         console.warn('[Unit Bubble] chart', JSON.stringify({
           container: cand.el.tagName + '.' + String(cand.el.className || '').slice(0, 24),
@@ -544,8 +577,12 @@
       watchChart(cand.el);
     }
 
+    lap('candidates+grids');
     refreshCta();
+    lap('refreshCta');
     flushDeferred();
+    lap('flushDeferred');
+    if (T) console.warn(`[Unit Bubble] timing: ${T.join(' | ')}`);
     if (rejected && rejected.length && !accepted.length) {
       console.warn(`[Unit Bubble] no chart from ${rejected.length} candidates:\n  ${rejected.slice(0, 8).join('\n  ')}`);
     }
@@ -608,6 +645,7 @@
   let ctaAnchor = null;
   let ctaMode = null;
   let ctaChart = null;
+  let hiddenCells = 0;
   let forceOpenUntil = 0;
 
   function triggerRank(el, own) {
@@ -761,7 +799,15 @@
 
     const triggers = scanTriggers();
     const opener = bestOpener(triggers);
-    if (!opener && !ctaChart) return removeCta(); // nothing to open: no dead button
+    // Scanning real stores showed the button promising a chart and failing to
+    // deliver on 12 of 22 pages, because a size-guide label is not evidence
+    // that a chart exists — it might open a page, or an image. Evidence is: a
+    // chart we have already read, or chart-shaped cells sitting hidden in the
+    // DOM waiting to be shown.
+    const evidence = !!ctaChart || hiddenCells >= 6;
+    if (!opener || !evidence) {
+      if (!ctaChart) return removeCta();
+    }
     if (ctaEl && ctaEl.isConnected && ctaAnchor && ctaAnchor.isConnected) return; // already placed
     const visibleTrigger = triggers.find((t) => t.visible);
     const anchor = opener || (visibleTrigger && visibleTrigger.el);
@@ -786,9 +832,16 @@
 
   function pass(root) {
     if (!active) return;
-    for (const node of collect(root || document.body)) {
+    const started = settings.debug ? performance.now() : 0;
+    const nodes = collect(root || document.body);
+    let marked = 0;
+    for (const node of nodes) {
+      if (marked >= MARK_BUDGET) {
+        queuePass(); // more to do: continue in the next idle slice
+        break;
+      }
       try {
-        mark(node);
+        marked += mark(node) ? 1 : 0;
       } catch {
         /* pages move nodes mid-pass; the next pass picks them up */
       }

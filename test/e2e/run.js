@@ -184,13 +184,26 @@ const CASES = [
     async run(t, page) {
       let s = await ui(page);
       t.ok('the late price still got a chip', s.chipCount >= 1, `${s.chipCount} chips`);
-      t.eq('the late size guide still got a button', s.cta, 1);
-      await watchPanel(page);
-      await clickCta(page);
-      await page.waitForTimeout(1500);
+      // This page builds its chart only when its own guide is clicked, so
+      // nothing about a chart exists yet. The button must not promise one:
+      // scanning real stores found it failing to deliver on 12 of 22 pages
+      // when a label alone was treated as evidence.
+      t.eq('no button, because there is no chart to open yet', s.cta, 0);
+
+      // The shopper opens the store's own guide.
+      await page.click('#guide');
+      await page.waitForTimeout(1600);
       s = await ui(page);
-      t.ok('the button opened the store guide and the panel followed', s.panel, JSON.stringify({ charts: s.charts, cta: s.cta }));
+      t.eq('now the chart exists and is read', s.charts, 1);
+      t.eq('and now there is a button', s.cta, 1);
+      t.ok('which is visible', s.ctaVisible);
+
+      await clickCta(page);
+      await watchPanel(page);
+      s = await ui(page);
+      t.ok('it opens the panel', s.panel);
       t.eq('four sizes', s.rows.length, 4);
+      t.eq('converted to inches', s.rows[0], ['S', '40.9″', '38.6″', '24.8″']);
       t.noFlashes(s);
       t.clean(page);
     },
