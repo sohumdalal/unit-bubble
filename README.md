@@ -108,10 +108,63 @@ that simply bids high; being last in DOM order, which breaks ties at equal
 z-index against markup injected after us; and the top layer, which beats z-index
 outright — entered through the popover API, or by living inside the `<dialog>`
 when the store used a native modal one, whose descendants are also the only
-things it doesn't make inert. All three are applied. It
-is draggable by its header (which pins it where you drop it), `Esc` or the ✕
-collapses it to a pill, and the unit toggle flips the whole chart at once. It
-hides itself when the chart scrolls out of view or the store's modal closes.
+things it doesn't make inert. All three are applied.
+
+It is draggable by its header (which pins it where you drop it), `Esc` or the ✕
+collapses it to a pill, and the unit toggle flips the whole chart at once.
+
+Opening is driven by the chart coming into view; closing is not. The panel stays
+until you dismiss it, because a store collapsing its own size guide shouldn't
+take the conversions with it. It goes away on its own only when the chart's
+element leaves the page entirely.
+
+A centred panel also sits *outside* the store's modal in the DOM, which meant
+every click on our own unit toggle read as a click-outside to the store and
+dismissed its guide underneath us. Pointer and click events are stopped at the
+shadow host — in the bubble phase, after they have reached our own buttons, so
+they work but never reach the store's document listener. Re-appending the host
+for DOM order happens only on open, too: moving a popover in the DOM closes it,
+which is what made a unit toggle look like a dismissal.
+
+### Knowing a chart is there
+
+The button comes first: the panel doesn't open itself on sight unless you turn
+that on. One **Open Chart** button appears, and what it does is read from
+current state each time you click it — a parsed chart opens the panel; a chart
+still hidden behind the store's modal opens that modal, and the pass that
+follows raises the panel. (Behaviour used to be *rebound* as the extension
+learned things, which let a later pass clobber it.)
+
+Three things make it appear consistently, all of which it first got wrong:
+
+- **It doesn't wait for evidence of a chart.** A size-guide label *is* the
+  evidence — that is what the label is for. Waiting to find hidden chart cells
+  first tied the button to how far the page had hydrated, which is why it often
+  needed a refresh to show up.
+- **Labels are normalised before matching.** A store's label is rarely just its
+  words: an accordion adds a `+` when it hydrates, a link adds a `›`, and those
+  arrive after first paint. Normalisation keeps letters, digits and `&` and drops
+  everything else — a strip-list was tried first and missed U+2212 MINUS SIGN.
+- **Detection re-runs on a schedule** — 300ms, 900ms, 2s and 4.5s after start,
+  plus `load` and every return to the tab — because a Shopify page injects its
+  size guide well after `document_idle`, and mutation records alone proved
+  unreliable.
+
+Placement is recomputed on every pass, so it self-corrects rather than being
+one-shot:
+
+- **Chart on screen** (the store's guide is open): above the chart, inside that
+  modal — the store's own size-guide link is *behind* the modal and invisible
+  from there.
+- **Chart not on screen**: beside the label that announces it. Labels are
+  *ranked*, not taken first-come, so the button lands in the same place on every
+  load — an explicit "size chart" or "size guide" beats a generic "size & fit"
+  accordion. After a block-level label it is appended *inside* the label, so it
+  sits on the same line as the text instead of shoving the page down a line, and
+  it is deliberately small (11px, a 5px dot) so it reads as a note on the
+  store's own label rather than a button competing with it.
+
+There is only ever one button; it is moved, never duplicated.
 
 ### Fit
 
@@ -176,8 +229,8 @@ src/options.*          settings page: everything, with a live chip sample
 test/detect.test.js     43 assertions on detection and conversion
 test/units.test.js      238 assertions: every unit spelling, every magnitude
 test/currencies.test.js 545 assertions: every code, symbol and locale format
-test/sizechart.test.js  72 assertions: grid reconstruction from browser rects,
-                        orientation, unit inference, fit verdicts
+test/sizechart.test.js  123 assertions: grid reconstruction from browser rects,
+                        orientation, unit inference, fit verdicts, label matching
 test/pages.test.js      40 assertions: both pages booted against a DOM stub —
                         ids resolve, handlers survive being called, manifest
                         names files that exist
