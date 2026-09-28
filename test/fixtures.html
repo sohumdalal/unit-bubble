@@ -1,0 +1,111 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Unit Bubble — test page</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; padding: 48px 24px 96px;
+    font: 400 15px/1.55 ui-sans-serif, -apple-system, system-ui, sans-serif;
+    background: #fbfbfc; color: #101013;
+  }
+  main { max-width: 760px; margin: 0 auto; display: grid; gap: 34px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: #8a8a93; margin: 0 0 10px; }
+  .muted { color: #6b6b74; font-size: 13px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .card { background: #fff; border: 1px solid rgba(0,0,0,.08); border-radius: 12px; padding: 14px; }
+  .price { font-size: 17px; font-weight: 600; margin: 6px 0 2px; }
+  table { border-collapse: collapse; width: 100%; background: #fff; border: 1px solid rgba(0,0,0,.08); border-radius: 12px; overflow: hidden; }
+  td, th { text-align: left; padding: 9px 12px; border-bottom: 1px solid rgba(0,0,0,.06); font-size: 14px; }
+  th { font-weight: 550; color: #6b6b74; font-size: 12px; }
+  tr:last-child td { border-bottom: 0; }
+  input, [contenteditable] { font: inherit; padding: 8px 10px; border: 1px solid rgba(0,0,0,.14); border-radius: 8px; width: 100%; background: #fff; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #131316; color: #f2f2f5; }
+    .card, table, input, [contenteditable] { background: #1d1d21; border-color: rgba(255,255,255,.1); }
+    td, th { border-color: rgba(255,255,255,.07); }
+  }
+</style>
+<main>
+  <header>
+    <h1>Unit Bubble test page</h1>
+    <p class="muted">Every underlined value below should raise a bubble on hover. The two fields at the bottom must stay untouched.</p>
+  </header>
+
+  <section>
+    <h2>Listings</h2>
+    <div class="cards">
+      <div class="card">
+        <strong>Linen shirt</strong>
+        <div class="price">€79,90</div>
+        <div class="muted">Chest 108 cm · sleeve 63.5 cm · 2.5 mm placket</div>
+      </div>
+      <div class="card">
+        <strong>Selvedge denim</strong>
+        <div class="price">¥24,800</div>
+        <div class="muted">Waist 81cm · inseam 84 cm · rise 28.5cm</div>
+      </div>
+      <div class="card">
+        <strong>Wool overcoat</strong>
+        <div class="price">£345.00</div>
+        <div class="muted">Fits up to 6'2" · hem sits 1.1 m from collar</div>
+      </div>
+      <div class="card">
+        <strong>Desk lamp</strong>
+        <div class="price">1 495 kr</div>
+        <div class="muted">Reach 46 cm · shade 14 cm · cord 2 m</div>
+      </div>
+      <div class="card">
+        <strong>Sneakers</strong>
+        <div class="price">129,00 PLN</div>
+        <div class="muted">Sole 32 mm · insole 27.5 cm</div>
+      </div>
+      <div class="card">
+        <strong>Carry-on</strong>
+        <div class="price">US$ 210</div>
+        <div class="muted">55 cm × 40 cm × 23 cm · handle 105cm</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Spec table</h2>
+    <table>
+      <tr><th>Spec</th><th>Value</th><th>Alt</th></tr>
+      <tr><td>Screen</td><td>27"</td><td>68.6 cm diagonal</td></tr>
+      <tr><td>Desk height</td><td>73 cm</td><td>28.75 in</td></tr>
+      <tr><td>Shipping (EU)</td><td>€12,50</td><td>1.299,00 EUR for express crate</td></tr>
+      <tr><td>Shipping (JP)</td><td>¥1,800</td><td>12 800 JPY insured</td></tr>
+      <tr><td>Duty estimate</td><td>CHF 48.20</td><td>₹4,250 equivalent</td></tr>
+      <tr><td>Weight-free cutoff</td><td>2.4 m</td><td>8 ft</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Should NOT be detected</h2>
+    <table>
+      <tr><td>Ready in 5 minutes</td><td>3 inside pockets</td></tr>
+      <tr><td>Raised 5 M in seed</td><td>Model R2 D2</td></tr>
+      <tr><td>Section 12 in the manual</td><td>Meeting at 5 min past</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Must stay editable</h2>
+    <div style="display:grid; gap:10px">
+      <input value="Type here: 30 cm and €19,99 should not be wrapped" />
+      <div contenteditable="true">Editable: 30 cm and €19,99 should not be wrapped either.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Injected late (tests the observer)</h2>
+    <div id="late" class="muted">waiting…</div>
+  </section>
+</main>
+<script>
+  setTimeout(() => {
+    document.getElementById('late').innerHTML =
+      'Added after 1.5s: <strong>SEK 2 990</strong> · 47 cm shelf · 5\'9" clearance';
+  }, 1500);
+</script>

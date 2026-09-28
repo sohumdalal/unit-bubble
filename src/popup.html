@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="ui.css" />
+<style>
+  body { width: 268px; padding: 14px; display: grid; gap: 12px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  a { color: var(--accent); text-decoration: none; font-size: 11px; }
+  a:hover { text-decoration: underline; }
+</style>
+<div class="row between">
+  <div class="row"><i class="mark"></i><h1>Unit Bubble</h1></div>
+  <label class="switch"><input type="checkbox" id="enabled" /><span></span></label>
+</div>
+<hr class="sep" />
+<div class="grid">
+  <label class="field"><span class="lbl">Lengths in</span>
+    <select id="length">
+      <option value="in">Inches</option>
+      <option value="cm">Centimeters</option>
+    </select>
+  </label>
+  <label class="field"><span class="lbl">Prices in</span>
+    <select id="currency"></select>
+  </label>
+</div>
+<div class="row between">
+  <span class="lbl" id="site-label">Off on this site</span>
+  <label class="switch"><input type="checkbox" id="site-off" /><span></span></label>
+</div>
+<hr class="sep" />
+<div class="foot">
+  <span class="muted" id="rates">…</span>
+  <span class="row" style="gap:6px">
+    <button id="refresh">Refresh</button>
+    <a href="#" id="settings">Settings</a>
+  </span>
+</div>
+<script src="lib/currencies.js"></script>
+<script src="popup.js"></script>

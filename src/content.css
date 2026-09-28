@@ -1,0 +1,10 @@
+/* The only style applied to the host page: a hairline underline on a hit.
+   No box model changes, so nothing reflows. */
+.ub-hit {
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  cursor: help;
+}
+.ub-quiet .ub-hit { text-decoration: none; }

@@ -1,0 +1,102 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Unit Bubble — Settings</title>
+<link rel="stylesheet" href="ui.css" />
+<style>
+  body { padding: 40px 24px 64px; }
+  main { max-width: 520px; margin: 0 auto; display: grid; gap: 26px; }
+  header { display: grid; gap: 6px; }
+  header .row { gap: 8px; }
+  h1 { font-size: 17px; }
+  section { display: grid; gap: 14px; }
+  h2 { margin: 0; font-size: 11px; font-weight: 590; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 14px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .triple { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .card select, .card input, .card textarea { background: var(--bg); }
+  .saved { color: var(--accent); font-size: 11px; opacity: 0; transition: opacity .2s ease; }
+  .saved.on { opacity: 1; }
+  .preview { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .chip {
+    padding: 6px 9px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line);
+    font-variant-numeric: tabular-nums; font-weight: 550;
+  }
+</style>
+<main>
+  <header>
+    <div class="row"><i class="mark"></i><h1>Unit Bubble</h1></div>
+    <p class="muted" style="margin:0">Hover a price or a measurement on any page. The bubble shows it in the units you picked — nothing is sent anywhere except the daily exchange-rate fetch.</p>
+  </header>
+
+  <section>
+    <h2>Read everything in</h2>
+    <div class="card">
+      <div class="pair">
+        <label class="field"><span class="lbl">Lengths</span>
+          <select id="length">
+            <option value="in">Inches (and feet)</option>
+            <option value="cm">Centimeters (and mm / m)</option>
+          </select>
+        </label>
+        <label class="field"><span class="lbl">Prices</span>
+          <select id="currency"></select>
+        </label>
+      </div>
+      <div class="preview">
+        <span class="lbl">Preview</span>
+        <span class="chip" id="pv-len">—</span>
+        <span class="chip" id="pv-cur">—</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ambiguous symbols</h2>
+    <div class="card">
+      <p class="muted" style="margin:0">Several countries share these. Pick what they should mean when a page doesn't say.</p>
+      <div class="triple">
+        <label class="field"><span class="lbl">“$” means</span><select id="dollarMeans"></select></label>
+        <label class="field"><span class="lbl">“¥” means</span><select id="yenMeans"></select></label>
+        <label class="field"><span class="lbl">“kr” means</span><select id="kronaMeans"></select></label>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Behaviour</h2>
+    <div class="card">
+      <div class="row between">
+        <span>Underline convertible values</span>
+        <label class="switch"><input type="checkbox" id="underline" /><span></span></label>
+      </div>
+      <hr class="sep" />
+      <div class="row between">
+        <span>Extension on</span>
+        <label class="switch"><input type="checkbox" id="enabled" /><span></span></label>
+      </div>
+      <hr class="sep" />
+      <label class="field"><span class="lbl">Never run on these sites — one domain per line</span>
+        <textarea id="disabledHosts" spellcheck="false" placeholder="docs.google.com&#10;mail.google.com"></textarea>
+      </label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Exchange rates</h2>
+    <div class="card">
+      <div class="row between">
+        <span class="muted" id="rate-status">…</span>
+        <button id="refresh">Refresh now</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="row between">
+    <span class="saved" id="saved">Saved</span>
+    <span class="muted">v0.1.0</span>
+  </div>
+</main>
+<script src="lib/currencies.js"></script>
+<script src="lib/detect.js"></script>
+<script src="lib/convert.js"></script>
+<script src="options.js"></script>
