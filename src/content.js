@@ -57,7 +57,7 @@
     bubbleHost = document.createElement('div');
     bubbleHost.setAttribute('data-ub-root', '');
     bubbleHost.style.cssText = 'all:initial;position:static';
-    const shadow = bubbleHost.attachShadow({ mode: 'closed' });
+    const shadow = bubbleHost.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
     style.textContent = BUBBLE_CSS;
     bubble = document.createElement('div');
@@ -164,7 +164,21 @@
     return nodes;
   }
 
-  function mark(node) {
+  const deferred = [];
+  const deferredSet = new WeakSet();
+
+  function mark(node, force) {
+    const whole = node.nodeValue.trim();
+    // A text node that is nothing but one measurement is what a chart cell
+    // looks like. Marking it immediately meant chips flashed across a chart and
+    // then vanished when the panel took over, so it waits one detection pass.
+    if (!force && whole.length <= 20 && UB.chart.parseCell(whole)) {
+      if (!deferredSet.has(node)) {
+        deferredSet.add(node);
+        deferred.push(node);
+      }
+      return 0;
+    }
     seen.add(node);
     const text = node.nodeValue;
     const usable = UB.detect
@@ -214,6 +228,21 @@
         next.after(chip);
       } else if (next.nodeType === Node.ELEMENT_NODE && next.textContent.trim().toUpperCase() === code) {
         next.after(chip);
+      }
+    }
+  }
+
+  // Cells that no chart claimed still deserve chips.
+  function flushDeferred() {
+    if (!deferred.length) return;
+    const nodes = deferred.splice(0, deferred.length);
+    for (const node of nodes) {
+      if (!node.parentElement || !node.isConnected) continue;
+      if (node.parentElement.closest('[data-ub-chart],[data-ub-root]')) continue;
+      try {
+        mark(node, true);
+      } catch {
+        /* the page moved it; a later pass will catch it */
       }
     }
   }
@@ -475,7 +504,6 @@
   // matched first during hydration (a "SIZE AND FIT" accordion) and kept it,
   // so the button ended up toggling an accordion instead of opening anything.
   const CTA_LABEL = 'Open Chart';
-  const TRIGGER_SELECTOR = 'a,button,summary,[role="button"],[class*="size"]';
 
   // Rank 0 and 1 are controls that open a chart. Rank 2+ merely mention sizing,
   // which is fine to sit beside but useless to click.
@@ -493,8 +521,8 @@
   let ctaChart = null;
   let forceOpenUntil = 0;
 
-  function triggerRank(el) {
-    for (const raw of [el.textContent, el.getAttribute('aria-label'), el.getAttribute('title'), el.value]) {
+  function triggerRank(el, own) {
+    for (const raw of [own, el.getAttribute('aria-label'), el.getAttribute('title'), el.value]) {
       if (!raw || !UB.chart.looksLikeTrigger(raw)) continue;
       const label = UB.chart.normalizeLabel(raw);
       const rank = TRIGGER_RANK.findIndex((re) => re.test(label));
@@ -503,24 +531,56 @@
     return -1; // not a trigger
   }
 
+  // The text a candidate owns, not what its descendants add up to, so a whole
+  // product section doesn't read as a "size guide" label.
+  function ownText(el) {
+    let text = '';
+    for (const node of el.childNodes) if (node.nodeType === Node.TEXT_NODE) text += node.nodeValue;
+    return text;
+  }
+
+  // Whether clicking this thing plausibly does something. Stores build their
+  // size-guide control out of anything: brut's is a bare <span> with no role,
+  // no tabindex and no onclick — its only tell is cursor:pointer.
+  function clickable(el) {
+    const tag = el.tagName;
+    if (tag === 'A' || tag === 'BUTTON' || tag === 'SUMMARY' || tag === 'LABEL') return true;
+    if (el.getAttribute('role') === 'button' || el.hasAttribute('onclick') || el.hasAttribute('tabindex')) return true;
+    try {
+      if (getComputedStyle(el).cursor === 'pointer') return true;
+      const parent = el.parentElement;
+      if (parent && getComputedStyle(parent).cursor === 'pointer') return true;
+    } catch {
+      /* detached */
+    }
+    return false;
+  }
+
   function scanTriggers() {
     const found = [];
-    for (const el of document.querySelectorAll(TRIGGER_SELECTOR)) {
+    for (const el of document.querySelectorAll('*')) {
+      // Cheap gates first: a label is a short leaf, and there are thousands of
+      // elements on a store page.
+      if (el.children.length > 2) continue;
+      const all = el.textContent;
+      if (!all || all.length > 60) continue;
       if (el.classList.contains('ub-cta') || el.closest('[data-ub-root]')) continue;
-      const rank = triggerRank(el);
+      const rank = triggerRank(el, ownText(el));
       if (rank === -1) continue;
-      found.push({ el, rank });
+      found.push({ el, rank, opens: clickable(el) });
     }
-    return found.sort((a, b) => a.rank - b.rank); // stable: document order within a rank
+    return found.sort((a, b) => Number(b.opens) - Number(a.opens) || a.rank - b.rank);
   }
 
   // The control whose click opens the store's own size guide.
   function bestOpener(triggers = scanTriggers()) {
-    for (const { el, rank } of triggers) {
-      if (rank > OPENER_MAX_RANK) continue;
+    for (const { el, rank, opens } of triggers) {
+      if (!opens || rank > OPENER_MAX_RANK) continue;
       // An opener that contains our button is fine and common — the button is
       // appended inside the store's own link. Our click stops at the shadow
-      // host, so the link is activated programmatically instead.
+      // host, so the link is activated programmatically instead. Clicking the
+      // innermost matching element is right either way: the event bubbles to
+      // whichever ancestor actually holds the listener.
       return el;
     }
     return null;
@@ -561,6 +621,9 @@
     ctaEl = cta;
     cta.title = `Read this size chart in ${settings.length === 'in' ? 'inches' : 'centimeters'}`;
     if (ctaAnchor === anchor && ctaMode === mode && cta.isConnected) return;
+    // Leave a button that is placed and visible where it is. Moving it every
+    // time the store opened or closed its modal read as a flash.
+    if (cta.isConnected && ctaAnchor && ctaAnchor.isConnected && cta.getBoundingClientRect().height > 0) return;
 
     cta.className = mode === 'block' ? 'ub-cta ub-cta-block' : 'ub-cta';
     if (mode === 'block') {
@@ -589,6 +652,7 @@
     const triggers = scanTriggers();
     const opener = bestOpener(triggers);
     if (!opener && !ctaChart) return removeCta(); // nothing to open: no dead button
+    if (ctaEl && ctaEl.isConnected && ctaAnchor && ctaAnchor.isConnected) return; // already placed
     const anchor = opener || (triggers[0] && triggers[0].el);
     if (!anchor) return removeCta();
     placeCta(anchor, 'inline');
@@ -622,7 +686,11 @@
     // Charts need layout, so read geometry after the marking writes settle.
     // This runs even when nothing was marked: a chart of bare numbers has
     // nothing for the marker to mark, and is still a chart.
-    requestAnimationFrame(() => queueRecheck(0));
+    requestAnimationFrame(() => {
+      queueRecheck(0);
+      // After detection has had its say, chip whatever was not a chart.
+      setTimeout(flushDeferred, 180);
+    });
   }
 
   function queuePass() {

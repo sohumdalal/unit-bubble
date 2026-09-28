@@ -164,9 +164,10 @@ async function main() {
       const text = msg.text();
       if (msg.type() === 'error' && /unit bubble/i.test(text)) errors.push(text);
     });
-    page.on('pageerror', (err) => {
-      if (/ub_|unit bubble|ub-/i.test(String(err))) errors.push(String(err));
-    });
+    // Every page error, not just ones that name us: the TypeError that broke
+    // the unit toggle mentioned neither the extension nor any of its symbols,
+    // so a name filter hid it completely.
+    page.on('pageerror', (err) => errors.push(String(err.stack || err).slice(0, 400)));
 
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });

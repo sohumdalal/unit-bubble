@@ -253,7 +253,7 @@ src/options.*          settings page: everything, with a live chip sample
 test/detect.test.js     43 assertions on detection and conversion
 test/units.test.js      251 assertions: every unit spelling, every magnitude
 test/currencies.test.js 553 assertions: every code, symbol and locale format
-test/sizechart.test.js  136 assertions: grid reconstruction from browser rects,
+test/sizechart.test.js  138 assertions: grid reconstruction from browser rects,
                         orientation, unit inference, fit verdicts, label matching
 tools/scan/*            scanners for real sites — see Scanning real sites
 test/pages.test.js      38 assertions: both pages booted against a DOM stub —
@@ -320,6 +320,52 @@ it checks invariants that must hold whatever the page contains:
 Both scanners exit non-zero when anything fails, so either can gate a commit.
 They walk other people's shops: concurrency is capped at six, the User-Agent
 says what it is, and a scan is not an excuse to hammer anyone.
+
+### Reproducing an interaction
+
+```bash
+node tools/scan/repro.js [--url ...] [--headed]
+```
+
+Drives one page through the interactions that kept breaking — open the store's
+guide, click Open Chart, work the unit toggle, dismiss, reopen — and prints the
+state of our own UI at each step. Both shadow roots are `open` specifically so
+this can read the panel; `closed` bought nothing, since a page can already see
+the host element and CSS can't pierce a shadow root either way.
+
+It earned itself immediately. Two bugs that survived three attempts at guessing
+from screenshots took one run to find:
+
+- brut's "Size Guide" is a bare `<span>` with **no attributes at all** — no
+  role, no tabindex, no onclick. Its only tells are `cursor: pointer` and its
+  parent's class. The opener scan only looked at `a`/`button`/`summary`/
+  `[role=button]`, found nothing, and removed the button as dead.
+- A chart cell carried no copy of its own text, so asking the panel for the
+  chart in its original units threw inside `render()`. That took the panel down
+  mid-draw and left `state.unit` on `'orig'`, so **every later open threw too** —
+  the panel could never be opened again after one dismissal.
+
+The second one hid for so long because the browser scan filtered page errors by
+name, and a `TypeError` about `'replace'` names neither the extension nor any of
+its symbols. Both scanners now report every page error.
+
+### Flashing
+
+Four separate causes, all of them something appearing and then being taken away:
+
+- **Chips across a chart.** Every cell got a chip, and they were stripped a
+  frame later once the chart was recognised. A text node that is nothing but one
+  measurement now waits for the detection pass; if no chart claims it, it gets
+  its chip 180ms later.
+- **The panel.** `show()` re-rendered on every intersection — scrolling, a modal
+  toggling, returning to the tab — and each render replayed the fade-in. It is a
+  no-op now when the same chart is already displayed intact.
+- **The button moving.** It was re-placed on every pass as the store opened and
+  closed its modal, hopping between "above the chart" and "beside the label". A
+  placed, visible button is now left alone.
+- **The button being removed.** With no opener found it was deleted, then
+  recreated on the next pass that found one. With a parsed chart in hand it
+  always has something to do, so it stays.
 
 ### Still open, from the last scan
 

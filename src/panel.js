@@ -157,7 +157,7 @@
       host.style.cssText =
         'all:unset;position:fixed;top:0;left:0;width:0;height:0;margin:0;padding:0;' +
         'border:0;background:none;overflow:visible;z-index:2147483647';
-      shadow = host.attachShadow({ mode: 'closed' });
+      shadow = host.attachShadow({ mode: 'open' });
       const style = document.createElement('style');
       style.textContent = CSS;
       shadow.append(style);
@@ -199,7 +199,9 @@
   function cellText(item, unit, sourceUnit) {
     if (!item) return '—';
     if (unit === 'orig') {
-      const text = item.text.replace(/\s+/g, ' ');
+      // Fall back to formatting from millimetres: a cell with no text of its
+      // own must not be able to throw inside a render.
+      const text = (item.text || UB.format.length(item.mm, item.unit || sourceUnit)).replace(/\s+/g, ' ');
       // A chart of bare numbers states its unit once, elsewhere; the panel has
       // to say it per cell or the column is meaningless on its own.
       return /[a-z"”″'′]/i.test(text) ? text : `${text} ${sourceUnit === 'in' ? 'in' : 'cm'}`;
@@ -214,6 +216,16 @@
 
   function render() {
     if (!state) return;
+    try {
+      draw();
+    } catch (err) {
+      // A half-drawn panel is worse than an unchanged one, and a throw here
+      // used to poison every later open.
+      console.warn('[Unit Bubble] panel render failed:', err);
+    }
+  }
+
+  function draw() {
     ensureHost();
     clear();
     const { chart, unit } = state;
@@ -402,6 +414,12 @@
 
   function show(chart) {
     const same = state && state.chart.key === chart.key;
+    // Already showing this chart, intact? Then do nothing. Re-rendering here is
+    // what made the panel flash every time the chart re-entered view.
+    if (same && host && host.isConnected && shadow && shadow.querySelector('.wrap')) {
+      state.chart = chart; // keep the freshest data (profile, measurements)
+      return;
+    }
     state = {
       chart,
       unit: same ? state.unit : chart.targetUnit === chart.sourceUnit ? 'orig' : chart.targetUnit,

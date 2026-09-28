@@ -16,10 +16,22 @@ const rect = (left, top, w = 34, h = 16) => ({ left, top, right: left + w, botto
 const cell = (text, left, top, w) => ({ ...UB.chart.parseCell(text), rect: rect(left, top, w) });
 
 /* 1. Cell parsing -------------------------------------------------------- */
-check('cell with unit', JSON.stringify(UB.chart.parseCell('47cm')), JSON.stringify({ value: 47, unit: 'cm', mm: 470 }));
+check(
+  'cell with unit',
+  JSON.stringify(UB.chart.parseCell('47cm')),
+  JSON.stringify({ value: 47, text: '47cm', unit: 'cm', mm: 470 })
+);
 check('cell spaced unit', UB.chart.parseCell('63.5 cm').mm, 635);
 check('cell inch mark', UB.chart.parseCell('27"').mm, 685.8);
-check('cell bare', JSON.stringify(UB.chart.parseCell('23')), JSON.stringify({ value: 23, unit: null, mm: null }));
+check(
+  'cell bare',
+  JSON.stringify(UB.chart.parseCell('23')),
+  JSON.stringify({ value: 23, text: '23', unit: null, mm: null })
+);
+// The panel shows a cell back in its own units, so the text has to travel with
+// it. Without this the unit toggle threw and took the panel down.
+check('cell keeps its text', UB.chart.parseCell(' 47cm ').text, '47cm');
+check('cell keeps fraction text', UB.chart.parseCell('25 1/2').text, '25 1/2');
 check('cell mixed fraction', UB.chart.parseCell('25 1/2').value, 25.5);
 check('cell quarter', UB.chart.parseCell('24 1/4').value, 24.25);
 check('cell three quarters', UB.chart.parseCell('22 3/4').value, 22.75);

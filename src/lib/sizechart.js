@@ -55,6 +55,7 @@
     const factor = raw ? UB.detect.LENGTH_UNITS[raw] : null;
     return {
       value,
+      text: String(text).trim(), // the cell as written: the panel shows it back
       unit: factor ? UB.detect.normalizeLengthUnit(raw) : null,
       mm: factor ? value * factor : null,
     };
