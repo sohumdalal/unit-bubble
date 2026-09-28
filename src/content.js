@@ -406,7 +406,7 @@
         targetUnit: settings.length,
         labelHeader: 'Size',
         unitInferred: unitless,
-        autoOpen: settings.chartAuto !== false || Date.now() < forceOpenUntil,
+        autoOpen: true, // if it is being shown at all, show it open
       };
       // Which measurements this chart is compared against. Inferred from the
       // chart's own columns and the page's words, switchable in the panel.
@@ -445,6 +445,9 @@
           for (const entry of entries) {
             const chart = charts.get(entry.target);
             if (!chart || !entry.isIntersecting) continue;
+            // The button is the invitation; opening on sight is opt-in, except
+            // right after the button itself opened the store's guide.
+            if (settings.chartAuto !== true && Date.now() >= forceOpenUntil) continue;
             UB.panel.show(chart);
           }
         },
@@ -483,30 +486,55 @@
     return out;
   }
 
-  function ensureCta(container) {
-    if (ctaEl && ctaEl.isConnected) return true;
+  function createCta() {
     const cta = document.createElement('button');
     cta.type = 'button';
     cta.textContent = 'Open Chart';
-    cta.title = `Read this size chart in ${settings.length === 'in' ? 'inches' : 'centimeters'}`;
     cta.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       ctaOpen();
     });
+    return cta;
+  }
+
+  // Put the button where the user is actually looking. When the chart itself is
+  // on screen that means above the chart — inside whatever modal it lives in,
+  // since the store's size-guide link is behind that modal and invisible. With
+  // no visible chart it goes beside the link. An existing button is moved
+  // rather than duplicated, so there is only ever one.
+  function placeCta(container) {
+    const cta = ctaEl && ctaEl.isConnected ? ctaEl : createCta();
+    cta.title = `Read this size chart in ${settings.length === 'in' ? 'inches' : 'centimeters'}`;
+    if (cta.isConnected && cta.getBoundingClientRect().height > 0) {
+      ctaEl = cta;
+      return true;
+    }
+
+    if (container && container.getBoundingClientRect().height > 0) {
+      const block = container.closest('table,figure,section,article') || container;
+      if (block.parentElement) {
+        cta.className = 'ub-cta ub-cta-block';
+        block.insertAdjacentElement('beforebegin', cta);
+        ctaEl = cta;
+        return true;
+      }
+    }
 
     const trigger = triggerElements()[0];
     if (trigger && trigger.parentElement) {
       cta.className = 'ub-cta';
-      trigger.insertAdjacentElement('afterend', cta);
-    } else if (container) {
-      const block = container.closest('table,figure,section,article') || container;
-      if (!block.parentElement) return false;
-      cta.className = 'ub-cta ub-cta-block';
-      block.insertAdjacentElement('beforebegin', cta);
-    } else {
-      return false; // nothing to attach to yet
+      // After a block-level label the button would land on its own line and
+      // push the page around. Inside it, it sits on the same line as the text —
+      // "SIZE AND FIT  · Open Chart" — which is how a note should read.
+      const display = getComputedStyle(trigger).display;
+      if (/block|flex|grid|list-item|table/.test(display)) trigger.append(cta);
+      else trigger.insertAdjacentElement('afterend', cta);
+      ctaEl = cta;
+      return true;
     }
+
+    if (!cta.isConnected) return false;
     ctaEl = cta;
     return true;
   }
@@ -514,10 +542,9 @@
   // A chart we have parsed: the button opens the panel.
   function attachChartCta(chart, container) {
     ctaOpen = () => {
-      chart.autoOpen = true;
       UB.panel.show(chart);
     };
-    ensureCta(container);
+    placeCta(container);
   }
 
   // A chart we can tell exists but cannot read yet, because the store keeps it
@@ -533,7 +560,7 @@
       queueRecheck(260);
       setTimeout(() => queueRecheck(0), 800);
     };
-    ensureCta(null);
+    placeCta(null);
   }
 
   function pageSignal() {

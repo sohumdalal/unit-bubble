@@ -127,7 +127,7 @@
     underline: false, // the chip is the marking now
     chipPrices: true,
     chipMeasurements: true,
-    chartAuto: true, // open the size-chart panel on sight, vs. start as a pill
+    chartAuto: false, // the Open Chart button comes first; on sight is opt-in
     chartHighlight: true, // highlight the row that matches your measurements
     disabledHosts: [],
     // Your own best-fitting garments, measured flat, in cm, per garment type.

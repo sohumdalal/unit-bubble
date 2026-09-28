@@ -46,7 +46,7 @@ length unit and target currency — plus an off switch for the current site.
 | `$` means | USD | Also `¥` (JPY or CNY) and `kr` (SEK / NOK / DKK / ISK) |
 | Chips on prices / on measurements | both on | Either can be turned off on its own |
 | Underline originals | off | A dotted underline under the value the chip converts |
-| Open the panel automatically | on | Off means a pill you tap to open |
+| Open the panel on sight | off | On skips the Open Chart button and opens immediately |
 | Highlight my size | on | Needs your measurements |
 | Your measurements | — | Per garment type; drives the highlight and the hover verdicts |
 | Never run on | — | One domain per line |
