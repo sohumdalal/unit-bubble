@@ -259,8 +259,8 @@
 
   function enabledHere(s) {
     if (!s.enabled) return false;
-    const host = location.hostname.replace(/^www\./, '');
-    return !(s.disabledHosts || []).some((h) => host === h || host.endsWith(`.${h}`));
+    const hostname = location.hostname.replace(/^www\./, '');
+    return !(s.disabledHosts || []).some((h) => hostname === h || hostname.endsWith(`.${h}`));
   }
 
   function apply(next, { rescan = false } = {}) {
