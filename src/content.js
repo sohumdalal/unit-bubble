@@ -232,7 +232,6 @@
     ctaAnchor = null;
     ctaMode = null;
     ctaChart = null;
-    ctaTrigger = null;
     hideBubble();
     UB.panel.hide();
     charts.clear();
@@ -469,30 +468,32 @@
 
   // Signalling that a chart is there.
   //
-  // One button, and its behaviour is read from current state on every click
-  // rather than rebound as the extension learns things — rebinding is what let
-  // a later pass clobber it. Placement is recomputed on every pass too, so it
-  // is self-correcting: above the chart while the chart is on screen, beside
-  // the store's label otherwise.
+  // Two different questions, which used to be conflated into one "trigger":
+  //   · what does the button DO — it needs a control that actually opens the
+  //     store's size guide, an explicit "size chart" or "size guide";
+  //   · where does it GO — next to that control, or above the chart itself
+  //     once the chart is on screen.
+  // Nothing is cached between passes: the first version latched onto whatever
+  // matched first during hydration (a "SIZE AND FIT" accordion) and kept it,
+  // so the button ended up toggling an accordion instead of opening anything.
   const CTA_LABEL = 'Open Chart';
+  const TRIGGER_SELECTOR = 'a,button,summary,[role="button"],[class*="size"]';
 
-  let ctaEl = null;
-  let ctaAnchor = null;
-  let ctaMode = null;
-  let ctaChart = null;
-  let ctaTrigger = null;
-  let forceOpenUntil = 0;
-
-  // Which label is the size-guide label. Ranked rather than first-come, so the
-  // button lands in the same place on every load: an explicit "size chart" or
-  // "size guide" beats a generic "size & fit" accordion. The choice is kept for
-  // as long as that element is still in the page.
+  // Rank 0 and 1 are controls that open a chart. Rank 2+ merely mention sizing,
+  // which is fine to sit beside but useless to click.
   const TRIGGER_RANK = [
     /chart|table|tabelle|tabella|taglie|tallas|tailles|tabel/i,
     /guide/i,
     /fit/i,
     /sizing|measurement|size (info|help)/i,
   ];
+  const OPENER_MAX_RANK = 1;
+
+  let ctaEl = null;
+  let ctaAnchor = null;
+  let ctaMode = null;
+  let ctaChart = null;
+  let forceOpenUntil = 0;
 
   function triggerRank(el) {
     for (const raw of [el.textContent, el.getAttribute('aria-label'), el.getAttribute('title'), el.value]) {
@@ -504,30 +505,35 @@
     return -1; // not a trigger
   }
 
-  function bestTrigger() {
-    if (ctaTrigger && ctaTrigger.isConnected) return ctaTrigger;
-    let best = null;
-    let bestRank = Infinity;
-    for (const el of document.querySelectorAll('a,button,summary,[role="button"],[class*="size"]')) {
+  function scanTriggers() {
+    const found = [];
+    for (const el of document.querySelectorAll(TRIGGER_SELECTOR)) {
       if (el.classList.contains('ub-cta') || el.closest('[data-ub-root]')) continue;
       const rank = triggerRank(el);
-      if (rank === -1 || rank >= bestRank) continue;
-      best = el;
-      bestRank = rank;
-      if (rank === 0) break; // an explicit "size chart" is as good as it gets
+      if (rank === -1) continue;
+      found.push({ el, rank });
     }
-    ctaTrigger = best;
-    return best;
+    return found.sort((a, b) => a.rank - b.rank); // stable: document order within a rank
   }
 
-  // Parsed chart in hand: open the panel. Otherwise open the store's own guide
-  // and let the pass that follows raise the panel.
+  // The control whose click opens the store's own size guide.
+  function bestOpener(triggers = scanTriggers()) {
+    for (const { el, rank } of triggers) {
+      if (rank > OPENER_MAX_RANK) continue;
+      // An opener that contains our button is fine and common — the button is
+      // appended inside the store's own link. Our click stops at the shadow
+      // host, so the link is activated programmatically instead.
+      return el;
+    }
+    return null;
+  }
+
   function ctaClick() {
     if (ctaChart && charts.has(ctaChart.el)) return UB.panel.show(ctaChart);
-    const trigger = bestTrigger();
-    if (!trigger) return;
+    const opener = bestOpener();
+    if (!opener) return;
     forceOpenUntil = Date.now() + 2500;
-    trigger.click();
+    opener.click();
     queueRecheck(250);
     setTimeout(() => queueRecheck(0), 800);
   }
@@ -544,13 +550,15 @@
     return cta;
   }
 
-  // container: the chart's element when it is on screen, otherwise null.
-  function placeCta(container) {
-    const onScreen = container && container.isConnected && container.getBoundingClientRect().height > 0;
-    const anchor = onScreen ? container.closest('table,figure,section,article') || container : bestTrigger();
-    if (!anchor || !anchor.parentElement) return;
+  function removeCta() {
+    if (ctaEl) ctaEl.remove();
+    ctaEl = null;
+    ctaAnchor = null;
+    ctaMode = null;
+  }
 
-    const mode = onScreen ? 'block' : 'inline';
+  function placeCta(anchor, mode) {
+    if (!anchor || !anchor.parentElement) return;
     const cta = ctaEl && ctaEl.isConnected ? ctaEl : createCta();
     ctaEl = cta;
     cta.title = `Read this size chart in ${settings.length === 'in' ? 'inches' : 'centimeters'}`;
@@ -570,16 +578,23 @@
     ctaMode = mode;
   }
 
-  // Runs every pass, so the button is placed correctly no matter how late the
-  // store hydrates its size guide or how the page changes afterwards.
+  // Recomputed every pass, so placement self-corrects however late the store
+  // hydrates. The button only exists when it has something to do.
   function refreshCta() {
     for (const [el, chart] of charts) {
       if (!el.isConnected || !el.getBoundingClientRect().height) continue;
       ctaChart = chart;
-      placeCta(el);
-      return;
+      const block = el.closest('table,figure,section,article') || el;
+      return placeCta(block, 'block');
     }
-    placeCta(null);
+
+    const triggers = scanTriggers();
+    const opener = bestOpener(triggers);
+    const parsed = ctaChart && charts.has(ctaChart.el);
+    if (!opener && !parsed) return removeCta(); // nothing to open: no dead button
+    const anchor = opener || (triggers[0] && triggers[0].el);
+    if (!anchor) return removeCta();
+    placeCta(anchor, 'inline');
   }
 
   function pageSignal() {

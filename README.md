@@ -158,13 +158,26 @@ one-shot:
 - **Chart on screen** (the store's guide is open): above the chart, inside that
   modal — the store's own size-guide link is *behind* the modal and invisible
   from there.
-- **Chart not on screen**: beside the label that announces it. Labels are
-  *ranked*, not taken first-come, so the button lands in the same place on every
-  load — an explicit "size chart" or "size guide" beats a generic "size & fit"
-  accordion. After a block-level label it is appended *inside* the label, so it
-  sits on the same line as the text instead of shoving the page down a line, and
-  it is deliberately small (11px, a 5px dot) so it reads as a note on the
-  store's own label rather than a button competing with it.
+- **Chart not on screen**: beside the control that opens the store's guide.
+  After a block-level label the button is appended *inside* it, so it sits on
+  the same line as the text instead of shoving the page down a line, and it is
+  deliberately small (11px, a 5px dot) so it reads as a note on the store's own
+  label rather than a button competing with it.
+
+Two questions that were once conflated into a single "trigger", and are now
+kept apart:
+
+- **What it does** needs a control that genuinely opens a chart — an explicit
+  "size chart" or "size guide". A "SIZE AND FIT" accordion mentions sizing but
+  opens nothing, so clicking it did nothing at all: it only toggled the
+  accordion, and even that was swallowed by our own `stopPropagation`.
+- **Where it goes** is that control, or the chart itself once on screen.
+
+Nothing is cached between passes. The first version kept whichever label matched
+first during hydration — the accordion, which exists before the store's real
+"Size Guide" link does — and never reconsidered. And the button now only exists
+when it has something to do: with no opener and no parsed chart it is removed
+rather than left dead.
 
 There is only ever one button; it is moved, never duplicated.
 
