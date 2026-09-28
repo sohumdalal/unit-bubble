@@ -232,13 +232,22 @@
     }
   }
 
-  // Cells that no chart claimed still deserve chips.
+  // Cells that no chart claimed still deserve chips — but only once they are on
+  // screen. Chipping a hidden cell means chipping a chart that has not been
+  // recognised yet, and every one of those chips is stripped a moment later
+  // when it is: that was the flash when a store's size guide opened.
   function flushDeferred() {
     if (!deferred.length) return;
     const nodes = deferred.splice(0, deferred.length);
     for (const node of nodes) {
       if (!node.parentElement || !node.isConnected) continue;
       if (node.parentElement.closest('[data-ub-chart],[data-ub-root]')) continue;
+      if (!rangeRect(node)) {
+        deferredSet.delete(node);
+        deferred.push(node); // still hidden: wait for it to be shown
+        deferredSet.add(node);
+        continue;
+      }
       try {
         mark(node, true);
       } catch {
@@ -329,8 +338,10 @@
         if (!text || !text.trim() || text.length > 40) return NodeFilter.FILTER_REJECT;
         const parent = node.parentElement;
         if (!parent || CELL_SKIP.has(parent.tagName)) return NodeFilter.FILTER_REJECT;
-        if (parent.classList && parent.classList.contains('ub-chip')) return NodeFilter.FILTER_REJECT;
-        if (parent.closest('[data-ub-root],[data-ub-chart]')) return NodeFilter.FILTER_REJECT;
+        if (parent.classList && (parent.classList.contains('ub-chip') || parent.classList.contains('ub-cta'))) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        if (parent.closest('[data-ub-root],[data-ub-chart],.ub-cta')) return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       },
     });
@@ -344,7 +355,7 @@
         continue;
       }
       if (cell) cells.push({ ...cell, rect, node });
-      else if (text.length <= 28) labels.push({ text, rect });
+      else if (text.length <= 28) labels.push({ text, rect, el: node.parentElement });
     }
     return { cells, labels };
   }
@@ -360,14 +371,36 @@
         byEl.get(el).items.push(cell);
       }
     }
+    // Tightest first, and on a tie the one holding fewer values: a <tbody> and
+    // the <main> around it can sit at the same depth, and taking the larger one
+    // merged a prose sentence into the chart below it.
     return [...byEl.values()]
       .filter((c) => c.items.length >= 6)
-      .sort((a, b) => a.depth - b.depth || b.items.length - a.items.length);
+      .sort((a, b) => a.depth - b.depth || a.items.length - b.items.length);
   }
 
   // Labels near the grid, by geometry rather than by DOM ancestry: a header row
   // usually sits outside the element the values live in.
-  function labelsNear(grid, labels) {
+  // The nearest ancestor that visually contains the chart: an overlay, a
+  // dialog, or a scroll box. Labels outside it belong to whatever is behind it.
+  function overlayScope(el) {
+    for (let node = el.parentElement, i = 0; node && node !== document.body && i < 12; node = node.parentElement, i++) {
+      if (node.tagName === 'DIALOG' || node.getAttribute('role') === 'dialog' || node.hasAttribute('aria-modal')) {
+        return node;
+      }
+      let style;
+      try {
+        style = getComputedStyle(node);
+      } catch {
+        return null;
+      }
+      if (style.position === 'fixed' || style.position === 'absolute') return node;
+      if (style.overflowY === 'auto' || style.overflowY === 'scroll') return node;
+    }
+    return null;
+  }
+
+  function labelsNear(grid, labels, scope) {
     const top = grid.rowBands[0].top;
     const bottom = grid.rowBands[grid.rowBands.length - 1].bottom;
     const left = grid.colBands[0].left;
@@ -376,6 +409,7 @@
     const padX = Math.max((right - left) * 0.5, 120);
     return labels.filter(
       (l) =>
+        (!scope || scope.contains(l.el)) &&
         l.rect.right > left - padX &&
         l.rect.left < right + padX &&
         l.rect.bottom > top - padY &&
@@ -405,8 +439,24 @@
       const grid = UB.chart.buildGrid(cand.items);
       if (!grid) continue;
 
-      UB.chart.attachLabels(grid, labelsNear(grid, labels));
+      const near = labelsNear(grid, labels, overlayScope(cand.el));
+      UB.chart.attachLabels(grid, near);
       UB.chart.orient(grid);
+      if (settings.debug) {
+        console.warn('[Unit Bubble] chart', JSON.stringify({
+          container: cand.el.tagName + '.' + String(cand.el.className || '').slice(0, 24),
+          depth: cand.depth,
+          cells: `${grid.cells.length}x${grid.cells[0].length}`,
+          headers: grid.headers,
+          rowLabels: grid.rowLabels,
+          transposed: grid.transposed,
+          demoted: !!grid.demotedSizeColumn,
+          labelsNearby: near.length,
+          candidates: near.slice(0, 20).map((l) => `${l.text}|${Math.round(l.rect.left)}-${Math.round(l.rect.right)}@${Math.round(l.rect.bottom)}`),
+          colBands: grid.colBands.map((c) => `${Math.round(c.left)}-${Math.round(c.right)}`),
+          firstRowTop: Math.round(grid.rowBands[0].top),
+        }));
+      }
 
       // A chart whose cells carry no unit needs stronger evidence that it is a
       // chart at all, since bare numbers are everywhere on a page.
@@ -460,6 +510,7 @@
     }
 
     refreshCta();
+    flushDeferred();
   }
 
   // Opening is driven by the chart coming into view. Closing is not: the panel
@@ -686,11 +737,8 @@
     // Charts need layout, so read geometry after the marking writes settle.
     // This runs even when nothing was marked: a chart of bare numbers has
     // nothing for the marker to mark, and is still a chart.
-    requestAnimationFrame(() => {
-      queueRecheck(0);
-      // After detection has had its say, chip whatever was not a chart.
-      setTimeout(flushDeferred, 180);
-    });
+    // Detection runs first; whatever it doesn't claim gets chipped there.
+    requestAnimationFrame(() => queueRecheck(0));
   }
 
   function queuePass() {

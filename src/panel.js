@@ -207,10 +207,9 @@
       return /[a-z"”″'′]/i.test(text) ? text : `${text} ${sourceUnit === 'in' ? 'in' : 'cm'}`;
     }
     const mm = item.mm;
-    if (unit === 'in') {
-      const inches = mm / 25.4;
-      return inches >= 36 ? UB.format.length(mm, 'ftin') : `${UB.format.num(inches, 1)}″`;
-    }
+    // Always plain inches here: a chart column in feet and inches is unreadable,
+    // and comparing sizes down a column is the whole point.
+    if (unit === 'in') return `${UB.format.num(mm / 25.4, 1)}″`;
     return mm >= 1000 ? `${UB.format.num(mm / 1000, 2)} m` : `${UB.format.num(mm / 10, 1)} cm`;
   }
 

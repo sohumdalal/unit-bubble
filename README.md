@@ -255,6 +255,7 @@ test/units.test.js      251 assertions: every unit spelling, every magnitude
 test/currencies.test.js 553 assertions: every code, symbol and locale format
 test/sizechart.test.js  138 assertions: grid reconstruction from browser rects,
                         orientation, unit inference, fit verdicts, label matching
+test/e2e/*              end-to-end suite and its mock stores — see End to end
 tools/scan/*            scanners for real sites — see Scanning real sites
 test/pages.test.js      38 assertions: both pages booted against a DOM stub —
                         ids resolve, handlers survive being called, manifest
@@ -268,6 +269,57 @@ tools/make-icons.js    regenerates icons/*.png
 ```bash
 npm test
 ```
+
+## End to end
+
+```bash
+npm run e2e                  # all cases
+npm run e2e -- --only svg    # cases matching a name
+npm run e2e -- --debug       # print what the reader decided, on failure
+HEADED=1 npm run e2e         # watch it happen
+npm run check                # unit suites + end to end
+```
+
+Eleven mock stores in `test/e2e/sites`, served over real HTTP, each built out of
+a pattern that has actually broken this extension: a chart in a modal opened by
+a bare `<span>`; vulgar fractions and a `$0` placeholder; a transposed chart of
+unitless cells; an SVG chart; a page where nothing exists at `document_idle`; a
+page that re-renders itself every second; a page of prose that must be left
+completely alone; a native modal `<dialog>`; a CSS grid with French labels; and
+one page carrying twelve currency formats at once.
+
+Each case drives the real extension in a real Chromium — clicking the store's
+own controls, our button, the unit toggle, the dismiss — and asserts on the
+resulting UI: chip values, chart recognition, headers, size labels, the row it
+picks for your measurements, hover verdicts, panel renders, page errors.
+
+**Flashing is measured, not eyeballed.** A script injected before the extension
+records every time one of our elements is added or removed, so a case can assert
+that no chip was ever added and then taken away, that the button was created at
+most once and never removed, and that two toggle clicks cause exactly two panel
+renders. That is what a flash is: something appearing and then being withdrawn.
+
+Rates are pinned through the extension's own service worker, so price
+assertions are exact rather than dependent on what the live endpoint says today.
+
+### What the first run found
+
+Eleven cases, 147 checks, and six real bugs in the first two runs:
+
+| Bug | Cause |
+| --- | --- |
+| A chart column rendered in feet — `96 cm` as `3′ 1.8″` | the height formatter's 3ft rule applied inside a chart |
+| A numeric size column (`36`, `38`, `40`) read as a measurement, shifting every value one column left | nothing distinguished a size column from a measurement column |
+| A prose sentence merged into the chart below it | on a depth tie the *larger* container won |
+| Our own button read as a column header | label collection skipped the panel and chips, but not the button |
+| **Chips sprayed across a chart and stripped a moment later** — the flash when a size guide opens | deferred cells were chipped on a timer whether or not they were visible, so a chart still hidden behind a modal got chips on every cell |
+| `Shoulders (A)` missing as a header | headers were matched to columns by centre distance; a long right-aligned header lines up at its right edge, and its centre missed by 33px |
+| `DESCRIPTION` and `SIZE AND FIT` used as size labels | labels were chosen by geometry alone, and a modal sits on top of a page whose own headings are therefore "near" the chart |
+
+The last two are the interesting ones. Headers now match a column by how much
+of their horizontal **span** they share, and labels are restricted to the
+chart's own visual container — the nearest overlay, dialog or scroll box — so
+text from behind a modal can't be mistaken for part of the chart.
 
 ## Scanning real sites
 

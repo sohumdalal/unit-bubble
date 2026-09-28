@@ -9,7 +9,9 @@
     "zip": "rm -f unit-bubble.zip && zip -qr unit-bubble.zip manifest.json src icons -x '*.DS_Store'",
     "scan:discover": "node tools/scan/discover.js",
     "scan": "node tools/scan/corpus.js",
-    "scan:browser": "node tools/scan/browser.js"
+    "scan:browser": "node tools/scan/browser.js",
+    "e2e": "node test/e2e/run.js",
+    "check": "npm test && npm run e2e"
   },
   "devDependencies": {
     "playwright": "^1.49.0"

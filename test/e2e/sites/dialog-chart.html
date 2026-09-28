@@ -1,0 +1,29 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Chore Jacket — Mock Dialog Store</title>
+<link rel="stylesheet" href="_store.css" />
+<main>
+  <h1>WOOL CHORE JACKET</h1>
+  <div class="price">CHF 1'299.00</div>
+  <button id="guide" type="button">Size Chart</button>
+  <!-- A native modal dialog: it makes the rest of the document inert, which is
+       the one case where our panel has to live inside it. -->
+  <dialog id="dlg" style="padding:24px; max-width:90vw">
+    <strong>Size Chart</strong>
+    <table>
+      <thead><tr><th>Size</th><th>Chest</th><th>Shoulders</th><th>Sleeve</th></tr></thead>
+      <tbody>
+        <tr><td>46</td><td>96 cm</td><td>42 cm</td><td>62 cm</td></tr>
+        <tr><td>48</td><td>102 cm</td><td>44 cm</td><td>63 cm</td></tr>
+        <tr><td>50</td><td>108 cm</td><td>46 cm</td><td>64 cm</td></tr>
+        <tr><td>52</td><td>114 cm</td><td>48 cm</td><td>65 cm</td></tr>
+      </tbody>
+    </table>
+    <button id="close" type="button">Close</button>
+  </dialog>
+</main>
+<script>
+  const dlg = document.getElementById('dlg');
+  document.getElementById('guide').addEventListener('click', () => dlg.showModal());
+  document.getElementById('close').addEventListener('click', () => dlg.close());
+</script>

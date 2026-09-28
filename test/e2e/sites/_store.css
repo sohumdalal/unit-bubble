@@ -1,0 +1,20 @@
+/* Deliberately plain, monospace-ish styling like the stores that broke things. */
+* { box-sizing: border-box; }
+body { margin: 0; padding: 40px 28px 120px; font: 400 15px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: #111; background: #fff; }
+main { max-width: 860px; margin: 0 auto; }
+h1 { font-size: 22px; letter-spacing: .02em; margin: 0 0 6px; }
+.price { font-size: 18px; margin: 4px 0 18px; }
+.accordion { border-top: 1px solid #ddd; padding: 14px 0; display: flex; justify-content: space-between; cursor: pointer; }
+.accordion h2 { font-size: 14px; margin: 0; font-weight: 400; letter-spacing: .08em; }
+.sizeguide { display: block; cursor: pointer; text-decoration: underline; margin: 10px 0 20px; width: fit-content; }
+table { border-collapse: collapse; width: 100%; }
+td, th { padding: 8px 12px; text-align: right; font-weight: 400; }
+th { color: #666; font-size: 13px; }
+td:first-child, th:first-child { text-align: left; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: flex-start; justify-content: center; z-index: 2147483647; }
+.modal.open { display: flex; }
+.modal .sheet { background: #fff; margin-top: 60px; padding: 26px 30px; width: min(900px, 92vw); max-height: 80vh; overflow: auto; }
+.modal .close { float: right; cursor: pointer; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 24px; }
+.grid .h { color: #666; font-size: 13px; }
+input { font: inherit; padding: 8px; width: 100%; border: 1px solid #ccc; }

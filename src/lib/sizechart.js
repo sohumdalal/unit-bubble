@@ -187,25 +187,37 @@
     const firstRow = grid.rowBands[0];
     const firstCol = grid.colBands[0];
 
+    // Match a header to a column by how much of their horizontal span they
+    // share, not by how close their centres are. A long right-aligned header
+    // ("Shoulders (A)") lines up with its column at the right edge while its
+    // centre sits well to the left — comparing centres missed it by 33px.
     grid.topLabels = grid.colBands.map((col) => {
-      const band = Math.max((col.right - col.left) * 0.9, 30);
+      const colWidth = col.right - col.left || 1;
       let best = null;
-      for (const l of labels) {
-        const c = mid(l.rect.left, l.rect.right);
-        if (Math.abs(c - col.center) > band) continue;
-        if (l.rect.bottom > firstRow.top + 2) continue;
-        if (!best || l.rect.bottom > best.rect.bottom) best = l;
+      for (const label of labels) {
+        if (label.rect.bottom > firstRow.top + 2) continue; // not above the values
+        const overlap = Math.min(label.rect.right, col.right) - Math.max(label.rect.left, col.left);
+        if (overlap <= 0) continue;
+        const width = label.rect.right - label.rect.left || 1;
+        if (overlap < Math.min(width, colWidth) * 0.6) continue; // barely touching
+        if (width > colWidth * 8) continue; // a banner across the whole chart
+        const lower = !best || label.rect.bottom > best.rect.bottom + 4;
+        const sameLine = best && Math.abs(label.rect.bottom - best.rect.bottom) <= 4;
+        if (lower || (sameLine && overlap > best.overlap)) best = { ...label, overlap };
       }
       return best ? clean(best.text) : '';
     });
 
     grid.leftLabels = grid.rowBands.map((row) => {
+      const rowHeight = row.bottom - row.top || 1;
       let best = null;
-      for (const l of labels) {
-        const c = mid(l.rect.top, l.rect.bottom);
-        if (c < row.top - 4 || c > row.bottom + 4) continue;
-        if (l.rect.right > firstCol.left + 4) continue;
-        if (!best || l.rect.right > best.rect.right) best = l;
+      for (const label of labels) {
+        if (label.rect.right > firstCol.left + 4) continue; // not left of the values
+        const overlap = Math.min(label.rect.bottom, row.bottom) - Math.max(label.rect.top, row.top);
+        if (overlap <= 0) continue;
+        const height = label.rect.bottom - label.rect.top || 1;
+        if (overlap < Math.min(height, rowHeight) * 0.6) continue;
+        if (!best || label.rect.right > best.rect.right) best = label;
       }
       return best ? clean(best.text) : '';
     });
@@ -226,6 +238,34 @@
       grid.headers = grid.topLabels || [];
       grid.rowLabels = grid.leftLabels || [];
     }
+    return demoteSizeColumn(grid);
+  }
+
+  const SIZE_HEADER = /^(?:size|sizes|taille|talla|tallas|gr(?:ö|oe|o)(?:ß|ss)e|tamanho|misura|taglia|storlek|maat|us|eu|uk)$/i;
+
+  // European and Japanese charts number their sizes — 36, 38, 40 — so the size
+  // column is indistinguishable from a measurement by shape alone. It gives
+  // itself away by being unitless while the others carry units, by being
+  // smaller than them, or by sitting under a header that names it.
+  function demoteSizeColumn(grid) {
+    const cols = grid.cells[0] ? grid.cells[0].length : 0;
+    if (cols < 3) return grid; // too few columns to give one up
+    const first = grid.cells.map((row) => row[0]).filter(Boolean);
+    const rest = grid.cells.flatMap((row) => row.slice(1)).filter(Boolean);
+    if (first.length < grid.cells.length - 1 || !rest.length) return grid;
+
+    const named = (grid.rowLabels || []).filter(Boolean).length;
+    const byHeader = SIZE_HEADER.test((grid.headers[0] || '').trim());
+    const unitless = first.every((cell) => !cell.unit);
+    const othersHaveUnits = rest.some((cell) => cell.unit);
+    const smaller = median(first.map((c) => c.value)) < median(rest.map((c) => c.value)) * 0.75;
+    const looksLikeSizes = named < grid.cells.length / 2 && unitless && (othersHaveUnits || smaller);
+    if (!byHeader && !looksLikeSizes) return grid;
+
+    grid.rowLabels = grid.cells.map((row, i) => (row[0] ? row[0].text : grid.rowLabels[i] || ''));
+    grid.cells = grid.cells.map((row) => row.slice(1));
+    grid.headers = grid.headers.slice(1);
+    grid.demotedSizeColumn = true;
     return grid;
   }
 
@@ -363,6 +403,7 @@
     transpose,
     looksLikeSizes,
     looksLikeMeasurements,
+    demoteSizeColumn,
     inferUnit,
     applyUnit,
     columnRole,

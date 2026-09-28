@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Carry-on 40L — Mock SPA</title>
+<link rel="stylesheet" href="_store.css" />
+<main>
+  <h1>CARRY-ON 40L</h1>
+  <div id="app"></div>
+</main>
+<script>
+  // Re-renders its own subtree every second, throwing away our markers with it.
+  // Marking has to recover without duplicating or flickering forever.
+  const render = () => {
+    document.getElementById('app').innerHTML = `
+      <div class="price">£245.00</div>
+      <p>55 cm &times; 40 cm &times; 23 cm, handle 105cm, wheels 60 mm.</p>
+      <p>Rendered at ${new Date().toISOString().slice(11, 19)}</p>`;
+  };
+  render();
+  let n = 0;
+  const timer = setInterval(() => {
+    render();
+    if (++n >= 6) clearInterval(timer);
+  }, 1000);
+</script>

@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>THE POCKET TEE — HEATHER GREY | Mock Brut</title>
+<link rel="stylesheet" href="_store.css" />
+<main>
+  <h1>THE BEST POCKET TEE</h1>
+  <div class="price">€65.00EUR</div>
+
+  <!-- The control that broke detection: a bare span, no role, no tabindex,
+       no onclick. Only cursor:pointer and its parent's class say it is one. -->
+  <div class="Vtl-SizeChartButton"><span class="sizeguide" id="guide">Size Guide</span></div>
+
+  <p>COLOR: HEATHER GREY</p>
+
+  <div class="accordion"><h2>DESCRIPTION</h2><span>+</span></div>
+  <div class="accordion" id="fit"><h2>SIZE AND FIT</h2><span>&#8722;</span></div>
+  <p>Quentin is 1m82 and wears size MEDIUM.</p>
+  <div class="accordion"><h2>FABRIC AND FACTORY</h2><span>+</span></div>
+  <p>Heavyweight (290 GSM) 100% cotton. Made in China.</p>
+  <p>FALL LOOKBOOK '26 &middot; &copy; Mock Brut 2026</p>
+
+  <div class="modal" id="modal">
+    <div class="sheet">
+      <span class="close" id="close">&#10005;</span>
+      <strong>Size Chart</strong>
+      <table>
+        <thead><tr><th>Size</th><th>Shoulders (A)</th><th>Chest (B)</th><th>Back (C)</th><th>Sleeves (D)</th></tr></thead>
+        <tbody>
+          <tr><td>XS</td><td>47cm</td><td>54cm</td><td>58cm</td><td>21cm</td></tr>
+          <tr><td>S</td><td>50cm</td><td>57cm</td><td>60cm</td><td>22cm</td></tr>
+          <tr><td>M</td><td>53cm</td><td>60cm</td><td>62cm</td><td>23cm</td></tr>
+          <tr><td>L</td><td>57cm</td><td>63cm</td><td>64cm</td><td>24cm</td></tr>
+          <tr><td>XL</td><td>61cm</td><td>67cm</td><td>66cm</td><td>25cm</td></tr>
+          <tr><td>XXL</td><td>65cm</td><td>71cm</td><td>69cm</td><td>26cm</td></tr>
+        </tbody>
+      </table>
+      <p>Measurements are taken laid flat.</p>
+    </div>
+  </div>
+</main>
+<script>
+  const modal = document.getElementById('modal');
+  document.getElementById('guide').addEventListener('click', () => modal.classList.add('open'));
+  document.getElementById('close').addEventListener('click', () => modal.classList.remove('open'));
+  // Closes on any click outside the sheet — the behaviour that was dismissing
+  // the store's own guide whenever our panel was clicked.
+  document.addEventListener('click', (e) => {
+    if (!modal.classList.contains('open')) return;
+    if (!e.target.closest('.sheet') && e.target.id !== 'guide') modal.classList.remove('open');
+  });
+</script>
