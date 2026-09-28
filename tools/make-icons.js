@@ -14,21 +14,14 @@ const inRounded=(x,y,w,h,r)=>{const cx=Math.min(Math.max(x,r),w-r),cy=Math.min(M
 
 function render(size){
   const S=size*SS, buf=Buffer.alloc(S*S*4);
-  const R=S/2;                             // full-bleed circle, same blue as the chip
-  const bcx=S*0.5, bcy=S*0.455, br=S*0.205;   // white speech bubble
-  const tail=[[S*0.415,S*0.60],[S*0.575,S*0.60],[S*0.455,S*0.775]];
-  const inTri=(x,y,[a,b,c])=>{const d=(p,q)=>(q[0]-p[0])*(y-p[1])-(q[1]-p[1])*(x-p[0]);
-    const s1=d(a,b),s2=d(b,c),s3=d(c,a);return (s1>=0&&s2>=0&&s3>=0)||(s1<=0&&s2<=0&&s3<=0);};
+  const R=S/2;                             // plain full-bleed circle, same blue as the chip
   for(let y=0;y<S;y++)for(let x=0;x<S;x++){
     const i=(y*S+x)*4;
     if(Math.hypot(x+0.5-R,y+0.5-R)>R)continue;
     // #0a84ff at the top easing into #007aff, so it reads solid at 16px
     const t=(x/S*0.4+y/S*0.6);
     const r=Math.round(10+(0-10)*t), g=Math.round(132+(122-132)*t), b=255;
-    let cr=r,cg=g,cb=b;
-    const d=Math.hypot(x+0.5-bcx,y+0.5-bcy);
-    if(d<=br||inTri(x+0.5,y+0.5,tail)){cr=255;cg=255;cb=255;}
-    buf[i]=cr;buf[i+1]=cg;buf[i+2]=cb;buf[i+3]=255;
+    buf[i]=r;buf[i+1]=g;buf[i+2]=b;buf[i+3]=255;
   }
   // box-downsample to target size
   const out=Buffer.alloc(size*size*4);
