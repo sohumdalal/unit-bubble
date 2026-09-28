@@ -50,6 +50,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
     refresh().then((entry) => respond(entry || { rates: self.UB.FALLBACK_RATES, fetchedAt: 0 }));
     return true;
   }
+  if (msg && msg.type === 'openOptions') {
+    chrome.runtime.openOptionsPage();
+    return false;
+  }
   if (msg && msg.type === 'refreshRates') {
     refresh(true).then(respond);
     return true;

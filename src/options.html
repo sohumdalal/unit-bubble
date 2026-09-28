@@ -63,10 +63,27 @@
   </section>
 
   <section>
+    <h2>Your measurements <span class="muted" style="text-transform:none;letter-spacing:0">— optional</span></h2>
+    <div class="card">
+      <p class="muted" style="margin:0">Size charts list garments measured flat. Measure a garment that already
+        fits you the same way and the panel will highlight the matching row. Type
+        <code>56</code> for <span id="unit-word">inches</span>, or <code>56cm</code> to be explicit.</p>
+      <div class="pair">
+        <label class="field"><span class="lbl">Chest</span><input type="text" id="m-chest" inputmode="decimal" placeholder="e.g. 22" /></label>
+        <label class="field"><span class="lbl">Shoulders</span><input type="text" id="m-shoulders" inputmode="decimal" placeholder="e.g. 18.5" /></label>
+      </div>
+      <div class="pair">
+        <label class="field"><span class="lbl">Waist</span><input type="text" id="m-waist" inputmode="decimal" placeholder="optional" /></label>
+        <label class="field"><span class="lbl">Hips</span><input type="text" id="m-hips" inputmode="decimal" placeholder="optional" /></label>
+      </div>
+    </div>
+  </section>
+
+  <section>
     <h2>Behaviour</h2>
     <div class="card">
       <div class="row between">
-        <span>Underline convertible values</span>
+        <span>Underline the original value</span>
         <label class="switch"><input type="checkbox" id="underline" /><span></span></label>
       </div>
       <hr class="sep" />

@@ -19,10 +19,24 @@
   td, th { text-align: left; padding: 9px 12px; border-bottom: 1px solid rgba(0,0,0,.06); font-size: 14px; }
   th { font-weight: 550; color: #6b6b74; font-size: 12px; }
   tr:last-child td { border-bottom: 0; }
+  table.chart td, table.chart th { text-align: right; }
+  table.chart td:first-child, table.chart th:first-child { text-align: left; font-weight: 600; }
+  .gridchart {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 18px;
+    background: #fff; border: 1px solid rgba(0,0,0,.08); border-radius: 12px; padding: 14px;
+  }
+  .gridchart .h { font-size: 12px; color: #6b6b74; font-weight: 550; }
+  .gridchart > div { font-variant-numeric: tabular-nums; }
+  #modal {
+    margin-top: 12px; background: #fff; border: 1px solid rgba(0,0,0,.08);
+    border-radius: 12px; padding: 16px;
+  }
+  #modal .flex { display: flex; gap: 26px; font-variant-numeric: tabular-nums; }
+  #modal .flex > div { display: grid; gap: 7px; }
   input, [contenteditable] { font: inherit; padding: 8px 10px; border: 1px solid rgba(0,0,0,.14); border-radius: 8px; width: 100%; background: #fff; }
   @media (prefers-color-scheme: dark) {
     body { background: #131316; color: #f2f2f5; }
-    .card, table, input, [contenteditable] { background: #1d1d21; border-color: rgba(255,255,255,.1); }
+    .card, table, input, [contenteditable], .gridchart, #modal { background: #1d1d21; border-color: rgba(255,255,255,.1); }
     td, th { border-color: rgba(255,255,255,.07); }
   }
 </style>
@@ -96,6 +110,39 @@
   </section>
 
   <section>
+    <h2>Size chart — real &lt;table&gt;, in cm</h2>
+    <table class="chart">
+      <thead><tr><th>Size</th><th>Shoulders (A)</th><th>Chest (B)</th><th>Back (C)</th><th>Sleeves (D)</th></tr></thead>
+      <tbody>
+        <tr><td>XS</td><td>47cm</td><td>54cm</td><td>58cm</td><td>21cm</td></tr>
+        <tr><td>S</td><td>50cm</td><td>57cm</td><td>60cm</td><td>22cm</td></tr>
+        <tr><td>M</td><td>53cm</td><td>60cm</td><td>62cm</td><td>23cm</td></tr>
+        <tr><td>L</td><td>57cm</td><td>63cm</td><td>64cm</td><td>24cm</td></tr>
+        <tr><td>XL</td><td>61cm</td><td>67cm</td><td>66cm</td><td>25cm</td></tr>
+        <tr><td>XXL</td><td>65cm</td><td>71cm</td><td>69cm</td><td>26cm</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Size chart — CSS grid of divs, no table markup</h2>
+    <div class="gridchart">
+      <div class="h">Taille</div><div class="h">Poitrine</div><div class="h">Longueur</div><div class="h">Manches</div>
+      <div>36</div><div>88 cm</div><div>61 cm</div><div>58 cm</div>
+      <div>38</div><div>92 cm</div><div>62 cm</div><div>59 cm</div>
+      <div>40</div><div>96 cm</div><div>63 cm</div><div>60 cm</div>
+      <div>42</div><div>100 cm</div><div>64 cm</div><div>61 cm</div>
+      <div>44</div><div>104 cm</div><div>65 cm</div><div>62 cm</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Size chart — injected into a modal on click (like Shopify apps do)</h2>
+    <button id="open-chart" type="button">Size Guide</button>
+    <div id="modal" hidden></div>
+  </section>
+
+  <section>
     <h2>Must stay editable</h2>
     <div style="display:grid; gap:10px">
       <input value="Type here: 30 cm and €19,99 should not be wrapped" />
@@ -109,6 +156,19 @@
   </section>
 </main>
 <script>
+  document.getElementById('open-chart').addEventListener('click', () => {
+    const modal = document.getElementById('modal');
+    modal.hidden = false;
+    modal.innerHTML = `
+      <strong>Size Chart</strong>
+      <div class="flex" style="margin-top:12px">
+        <div><em>Size</em><span>XS</span><span>S</span><span>M</span><span>L</span></div>
+        <div><em>Shoulder</em><span>44cm</span><span>46cm</span><span>48cm</span><span>50cm</span></div>
+        <div><em>Bust</em><span>86cm</span><span>90cm</span><span>94cm</span><span>98cm</span></div>
+        <div><em>Waist</em><span>68cm</span><span>72cm</span><span>76cm</span><span>80cm</span></div>
+      </div>`;
+  });
+
   setTimeout(() => {
     document.getElementById('late').innerHTML =
       'Added after 1.5s: <strong>SEK 2 990</strong> · 47 cm shelf · 5\'9" clearance';

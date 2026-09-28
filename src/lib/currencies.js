@@ -124,7 +124,10 @@
     dollarMeans: 'USD',
     yenMeans: 'JPY',
     kronaMeans: 'SEK',
-    underline: true,
+    underline: false, // the chip is the marking now
     disabledHosts: [],
+    // Your own best-fitting garment, measured flat, in cm. Used only to
+    // highlight a row in the size-chart panel.
+    measurementsCm: { chest: '', shoulders: '', waist: '', hips: '' },
   };
 })(typeof self !== 'undefined' ? self : globalThis);
