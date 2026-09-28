@@ -22,32 +22,6 @@ function save(patch) {
     clearTimeout(savedTimer);
     savedTimer = setTimeout(() => $('saved').classList.remove('on'), 1200);
   });
-  renderSample();
-}
-
-/* ---------- the live sample ---------- */
-
-// Built from the real converter and styled by content.css, so what you see here
-// is exactly what lands on a page.
-function renderSample() {
-  const price = settings.currency === 'EUR' ? { code: 'USD', value: 65 } : { code: 'EUR', value: 65 };
-  const priceConv = UB.convert({ kind: 'money', ...price }, settings, rates);
-  const lengthMm = settings.length === 'in' ? 635 : 30 * 25.4;
-  const lengthMatch = {
-    kind: 'length',
-    mm: lengthMm,
-    unit: settings.length === 'in' ? 'cm' : 'in',
-  };
-  const lengthConv = UB.convert(lengthMatch, settings, rates);
-  const chip = (text) => `<span class="ub-chip">${text}</span>`;
-  const hit = (original, converted) =>
-    `<span class="ub-hit">${original}${converted ? chip(converted) : ''}</span>`;
-
-  $('sample').innerHTML =
-    `Chest ${hit(UB.format.length(lengthMm, lengthMatch.unit), lengthConv && lengthConv.primary)}, ` +
-    `sleeve ${hit(settings.length === 'in' ? '21 1/2 in' : '54.6 cm', settings.length === 'in' ? null : '21.5 in')} — ` +
-    `${hit(UB.format.money(price.value, price.code), priceConv && priceConv.primary)}`;
-  document.documentElement.classList.toggle('ub-quiet', !settings.underline);
 }
 
 /* ---------- measurements ---------- */
@@ -219,7 +193,6 @@ async function init() {
   showMeasurements();
   showHosts();
   showRates();
-  renderSample();
 
   $('addhost-go').onclick = addHost;
   $('addhost').onkeydown = (e) => {
@@ -234,7 +207,6 @@ async function init() {
     $('rate-status').textContent = rateStatus(next);
     $('refresh').disabled = false;
     showRates();
-    renderSample();
   };
 
   $('reset').onclick = () => {

@@ -1,0 +1,50 @@
+# Seed domains for the scanner. One per line, comments with #.
+# `npm run scan:discover` reads each domain's sitemap and writes product URLs to
+# tools/scan/urls.txt — that is how a few dozen domains become 1000+ pages.
+# Chosen for spread across currency and unit conventions, not for popularity.
+
+# EUR, cm
+brut-clothing.com
+asphaltegold.de
+sneakersnstuff.com
+lescoyotesdeparis.com
+maison-standards.com
+
+# GBP, cm and inches mixed
+percivalclo.com
+oliverspencer.co.uk
+communitycloth.co.uk
+sunspel.com
+
+# USD, inches
+buckmason.com
+taylorstitch.com
+3sixteen.com
+knickerbockermfg.com
+flintandtinder.com
+
+# JPY, cm
+hinoya.com
+kapital.jp
+
+# SEK / NOK / DKK, cm
+asket.com
+norseprojects.com
+elkasnow.com
+
+# CHF with apostrophe grouping
+qwstion.com
+
+# CAD / AUD dollars
+naked-famous.com
+thepacificoptical.com
+
+# INR, lakh grouping
+nicobar.com
+
+# BRL, comma decimals
+oscarcalcado.com.br
+
+# KRW / TWD / SGD
+musinsa.com
+oqliq.com

@@ -15,6 +15,19 @@
     `|\\d{1,3}(?:${GROUP}\\d{3})*(?:[.,]\\d{1,4})?` +
     `|\\d+(?:[.,]\\d{1,4})?`;
 
+  // Vulgar fractions, which US size charts use as often as "1/2" — 3sixteen
+  // writes 17¼ and 28⅞. Found by scanning real stores.
+  const VULGAR = {
+    '¼': 0.25, '½': 0.5, '¾': 0.75,
+    '⅐': 1 / 7, '⅑': 1 / 9, '⅒': 0.1,
+    '⅓': 1 / 3, '⅔': 2 / 3,
+    '⅕': 0.2, '⅖': 0.4, '⅗': 0.6, '⅘': 0.8,
+    '⅙': 1 / 6, '⅚': 5 / 6,
+    '⅛': 0.125, '⅜': 0.375, '⅝': 0.625, '⅞': 0.875,
+  };
+  const VULGAR_CLASS = `[${Object.keys(VULGAR).join('')}]`;
+  const VULGAR_RE = new RegExp(`^(\\d+)?[\\s\\u00a0]*(${VULGAR_CLASS})$`);
+
   const LENGTH_UNITS = {
     mm: 1, millimeter: 1, millimeters: 1, millimetre: 1, millimetres: 1,
     cm: 10, centimeter: 10, centimeters: 10, centimetre: 10, centimetres: 10,
@@ -52,7 +65,12 @@
   // is what keeps it from colliding with "1 m 82 cm apart".
   const METRE_CM = new RegExp(`(?<![\\w.,])(\\d)m(\\d{1,2})(?![\\w])`, 'g');
   // A length may be written as a mixed fraction: 25 1/2 in.
-  const LENGTH_NUM = `\\d+[\\s\\u00a0]+\\d+\\s*\\/\\s*\\d+|\\d+\\s*\\/\\s*\\d+|${NUM}`;
+  const LENGTH_NUM =
+    `\\d+[\\s\\u00a0]*${VULGAR_CLASS}` +
+    `|${VULGAR_CLASS}` +
+    `|\\d+[\\s\\u00a0]+\\d+\\s*\\/\\s*\\d+` +
+    `|\\d+\\s*\\/\\s*\\d+` +
+    `|${NUM}`;
   const LENGTH = new RegExp(
     `(?<![\\w.,$€£¥₹])(${LENGTH_NUM})${SPACE}*(${LENGTH_ALT})(?![\\w])`,
     'gi'
@@ -93,6 +111,9 @@
   // "1,299.00" -> 1299, "1.299,00" -> 1299, "1 299" -> 1299, "25 1/2" -> 25.5.
   // hint is a currency code; it only breaks the genuinely ambiguous "1.299" case.
   function parseNumber(raw, hint) {
+    const vulgar = String(raw).trim().match(VULGAR_RE);
+    if (vulgar) return Number(vulgar[1] || 0) + VULGAR[vulgar[2]];
+
     const frac = String(raw).trim().match(FRACTION);
     if (frac) {
       const denom = Number(frac[3]);
@@ -202,7 +223,7 @@
     while ((m = MONEY_PRE.exec(text))) {
       const code = resolveSymbol(m[1], settings);
       const value = parseNumber(m[2], code);
-      if (!code || value == null) continue;
+      if (!code || !value) continue; // a zero price converts to zero
       push(out, { kind: 'money', start: m.index, end: m.index + m[0].length, text: m[0], code, value });
     }
 
@@ -210,7 +231,7 @@
     while ((m = MONEY_POST.exec(text))) {
       const code = resolveSymbol(m[2], settings);
       const value = parseNumber(m[1], code);
-      if (!code || value == null) continue;
+      if (!code || !value) continue;
       push(out, { kind: 'money', start: m.index, end: m.index + m[0].length, text: m[0], code, value });
     }
 
@@ -218,7 +239,7 @@
     while ((m = CODE_RE.exec(text))) {
       const code = (m[1] || m[4] || '').toUpperCase();
       const value = parseNumber(m[2] || m[3], code);
-      if (!UB.CURRENCIES[code] || value == null) continue;
+      if (!UB.CURRENCIES[code] || !value) continue;
       push(out, { kind: 'money', start: m.index, end: m.index + m[0].length, text: m[0], code, value });
     }
 
@@ -245,5 +266,5 @@
     return 'ft';
   }
 
-  UB.detect = { findMatches, parseNumber, LENGTH_UNITS, normalizeLengthUnit, FRACTION };
+  UB.detect = { findMatches, parseNumber, LENGTH_UNITS, normalizeLengthUnit, FRACTION, VULGAR, VULGAR_CLASS };
 })(typeof self !== 'undefined' ? self : globalThis);

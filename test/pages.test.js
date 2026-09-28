@@ -17,6 +17,10 @@ const ok = (name, cond, detail = '') => (cond ? pass++ : fails.push(`${name}${de
 
 const read = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
 
+// Never let a missing id throw: a renamed element should fail a check, not take
+// the whole suite down with it.
+const el = (doc, id) => doc.byId.get(id) || { innerHTML: '', textContent: '', value: '' };
+
 /* ---------- a DOM small enough to read, large enough to boot a page ------- */
 
 // Elements the page creates by assigning innerHTML have to exist afterwards,
@@ -207,21 +211,11 @@ check('settings page: no script errors', opts.errors.join(' | '), '');
 check('settings page: init did not reject', newRejections(), '');
 markRejections();
 ok('settings page: loads every lib it uses', opts.scripts.length >= 6, `loaded ${opts.scripts.length}`);
-check('settings page: currency select filled', opts.document.byId.get('currency').innerHTML.includes('USD'), true);
-check('settings page: version shown', opts.document.byId.get('version').textContent, 'v0.2.0');
-ok(
-  'settings page: sample uses the real chip class',
-  opts.document.byId.get('sample').innerHTML.includes('ub-chip'),
-  opts.document.byId.get('sample').innerHTML.slice(0, 120)
-);
-ok(
-  'settings page: sample converted a price',
-  /\$\d/.test(opts.document.byId.get('sample').innerHTML),
-  opts.document.byId.get('sample').innerHTML.slice(0, 160)
-);
-check('settings page: rates listed', opts.document.byId.get('rate-list').innerHTML.includes('1 EUR ='), true);
-check('settings page: profile cards built', opts.document.byId.get('profiles').innerHTML.includes('data-role="chest"'), true);
-check('settings page: blocked list rendered', opts.document.byId.get('hosts').innerHTML.includes('everywhere'), true);
+check('settings page: currency select filled', el(opts.document, 'currency').innerHTML.includes('USD'), true);
+check('settings page: version shown', el(opts.document, 'version').textContent, 'v0.2.0');
+check('settings page: rates listed', el(opts.document, 'rate-list').innerHTML.includes('1 EUR ='), true);
+check('settings page: profile cards built', el(opts.document, 'profiles').innerHTML.includes('data-role="chest"'), true);
+check('settings page: blocked list rendered', el(opts.document, 'hosts').innerHTML.includes('everywhere'), true);
 
 // Every handler the page wires up must survive being called.
 const handlerErrors = [];
@@ -250,7 +244,7 @@ await flush();
 check('popup: no script errors', popup.errors.join(' | '), '');
 check('popup: init did not reject', newRejections(), '');
 markRejections();
-check('popup: currency select filled', popup.document.byId.get('currency').innerHTML.includes('EUR'), true);
+check('popup: currency select filled', el(popup.document, 'currency').innerHTML.includes('EUR'), true);
 
 /* ---------- content script and worker parse in their own contexts -------- */
 
@@ -298,4 +292,14 @@ if (fails.length) {
 }
 }
 
-main();
+main().catch((err) => {
+  console.error('\nThe suite itself crashed before reporting:\n', err);
+  process.exit(1);
+});
+
+process.on('exit', (code) => {
+  if (code === 0 && !pass) {
+    console.error('The suite exited without running a single check.');
+    process.exitCode = 1;
+  }
+});

@@ -365,6 +365,7 @@
   function detectCharts() {
     if (!active) return;
     dropDeadCharts();
+    UB.panel.keepAlive();
     const { cells, labels } = collectCells(document.body);
     if (cells.length < 6) return refreshCta();
 
@@ -388,9 +389,7 @@
       const unit = UB.chart.inferUnit(cand.items, unitless ? scopeText(cand.el) : '');
       if (!unit || !UB.chart.applyUnit(cand.items, unit)) continue;
 
-      // A chart already in the unit you read needs no panel.
       const sourceImperial = imperial(unit);
-      if (sourceImperial === (settings.length === 'in')) continue;
 
       const chart = {
         el: cand.el,
@@ -399,7 +398,8 @@
           .join(',')}`,
         grid,
         roles: (grid.headers || []).map(UB.chart.columnRole),
-        sourceUnit: sourceImperial ? 'in' : unit,
+        sourceUnit: sourceImperial ? 'in' : 'cm',
+        unit,
         targetUnit: settings.length,
         labelHeader: 'Size',
         unitInferred: unitless,
@@ -458,11 +458,9 @@
   // A chart whose element is gone (the store re-rendered, or you navigated
   // within an SPA) has nothing left to show.
   function dropDeadCharts() {
-    for (const [el, chart] of charts) {
+    for (const [el] of charts) {
       if (el.isConnected) continue;
-      charts.delete(el);
-      if (ctaChart === chart) ctaChart = null;
-      if (UB.panel.current() === chart.key) UB.panel.hide();
+      charts.delete(el); // re-detected if the store puts it back
     }
   }
 
@@ -529,7 +527,7 @@
   }
 
   function ctaClick() {
-    if (ctaChart && charts.has(ctaChart.el)) return UB.panel.show(ctaChart);
+    if (ctaChart) return UB.panel.show(ctaChart);
     const opener = bestOpener();
     if (!opener) return;
     forceOpenUntil = Date.now() + 2500;
@@ -590,8 +588,7 @@
 
     const triggers = scanTriggers();
     const opener = bestOpener(triggers);
-    const parsed = ctaChart && charts.has(ctaChart.el);
-    if (!opener && !parsed) return removeCta(); // nothing to open: no dead button
+    if (!opener && !ctaChart) return removeCta(); // nothing to open: no dead button
     const anchor = opener || (triggers[0] && triggers[0].el);
     if (!anchor) return removeCta();
     placeCta(anchor, 'inline');
@@ -659,8 +656,12 @@
     for (const delay of [300, 900, 2000, 4500]) setTimeout(() => queueRecheck(0), delay);
     window.addEventListener('load', () => queueRecheck(150), { once: true });
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) queueRecheck(150);
+      if (document.hidden) return;
+      UB.panel.keepAlive();
+      queueRecheck(150);
     });
+    window.addEventListener('focus', () => UB.panel.keepAlive());
+    window.addEventListener('pageshow', () => UB.panel.keepAlive());
 
     observer.observe(document.documentElement, {
       childList: true,

@@ -133,6 +133,14 @@ for (const code of UB.ZERO_DECIMAL) {
   check(`${code} has no decimals`, /[.,]\d\d$/.test(out.primary), false);
 }
 
+/* 6b. A zero price is not worth converting ------------------------------- */
+// Found by scanning 3sixteen, which renders a "$0" placeholder on every page.
+for (const text of ['$0', '$0.00', '€0,00', '0 USD', 'USD 0', '¥0']) {
+  check(`zero price skipped: ${text}`, money(text), null);
+}
+check('a cent still counts', money('$0.01'), 'USD 0.01');
+check('99 cents still counts', money('$0.99'), 'USD 0.99');
+
 /* 7. Prose that must not be read as money -------------------------------- */
 for (const text of [
   'Chapter 12 in the manual',

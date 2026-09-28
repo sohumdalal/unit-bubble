@@ -110,10 +110,17 @@ outright — entered through the popover API, or by living inside the `<dialog>`
 when the store used a native modal one, whose descendants are also the only
 things it doesn't make inert. All three are applied.
 
-It is draggable by its header (which pins it where you drop it), `Esc` or the ✕
+It sizes itself to the chart — `width: max-content` inside a flex column capped
+at 94vh — so it scrolls only when a chart genuinely exceeds the screen. It is
+draggable by its header (which pins it where you drop it), `Esc` or the ✕
 dismisses it, and the unit toggle flips the whole chart at once. Dismissing
 closes it outright rather than leaving a pill behind: the Open Chart button is
 already the way back in, and two entry points at once is one too many.
+
+The toggle always offers two real choices — the chart's own unit and the other
+one — so a chart already in your units still opens, still converts the other
+way, and still gives fit verdicts. Charts in your own units used to be skipped
+entirely, which left the button and the toggle doing nothing on them.
 
 Opening is driven by the chart coming into view; closing is not. The panel stays
 until you dismiss it, because a store collapsing its own size guide shouldn't
@@ -213,6 +220,8 @@ seam 1″ out is a different problem from a sleeve 1″ out:
   narrow nbsp), Swiss `1'299.00`, and Indian lakh grouping `1,23,456`. Resolved
   by separator position, with the currency as a tiebreaker on the genuinely
   ambiguous `1.299`.
+- **Fractions, both notations** — `25 1/2 in` and the vulgar fractions US charts
+  actually use: `17¼`, `28⅞`, `33¾`.
 
 Deliberately skipped: uppercase `M` (million, not metres), bare `in` as a
 preposition (`12 in the manual`, `1 in 4 people`), `290 GSM`, years
@@ -242,11 +251,12 @@ src/background.js      rate fetch, cache, alarm, message handler
 src/popup.*            toolbar popup: the two settings you change while shopping
 src/options.*          settings page: everything, with a live chip sample
 test/detect.test.js     43 assertions on detection and conversion
-test/units.test.js      238 assertions: every unit spelling, every magnitude
-test/currencies.test.js 545 assertions: every code, symbol and locale format
-test/sizechart.test.js  123 assertions: grid reconstruction from browser rects,
+test/units.test.js      251 assertions: every unit spelling, every magnitude
+test/currencies.test.js 553 assertions: every code, symbol and locale format
+test/sizechart.test.js  136 assertions: grid reconstruction from browser rects,
                         orientation, unit inference, fit verdicts, label matching
-test/pages.test.js      40 assertions: both pages booted against a DOM stub —
+tools/scan/*            scanners for real sites — see Scanning real sites
+test/pages.test.js      38 assertions: both pages booted against a DOM stub —
                         ids resolve, handlers survive being called, manifest
                         names files that exist
 test/fixtures.html      real-world strings plus three differently-built charts
@@ -258,6 +268,64 @@ tools/make-icons.js    regenerates icons/*.png
 ```bash
 npm test
 ```
+
+## Scanning real sites
+
+Unit tests say the arithmetic is right. They can't say whether a real store's
+markup defeats the detector — so there are two scanners in `tools/scan`, and
+they are where several of the bugs above came from.
+
+```bash
+npm run scan:discover          # domains -> product URLs, from each site's sitemap
+npm run scan                   # thousands of pages, no browser
+npm run scan:browser -- --limit 25 --length cm --currency EUR
+```
+
+**`scan:discover`** reads the sitemap of each domain in `tools/scan/sites.txt`
+and writes product URLs to `tools/scan/urls.txt` — that is how a few dozen
+domains become 1000+ pages. Product pages, not homepages: a homepage says
+nothing about whether the extension works.
+
+**`npm run scan`** is the mode that scales. It fetches the HTML, decodes the
+entities a browser would, and runs the extension's own detector over the text —
+no browser, ~8 pages a second. It reports what was found, what looked wrong
+(implausible amounts, overlapping matches, missing rates), and **which numeric
+strings it walked past**, which is the part worth reading: that list is where
+missing patterns show up. Two of them did, on the first run of 60 pages:
+
+| Found by the scan | Was |
+| --- | --- |
+| `17¼`, `33¾`, `28⅞` on 3sixteen | unparsed — vulgar fractions weren't supported at all |
+| `$0` on every 3sixteen page | converted to a `€0.00` chip |
+
+**`npm run scan:browser`** loads the real extension into a real Chromium and
+checks what it actually did to the page. It drives the extension's settings
+through its own service worker, so you can point it at units the pages *aren't*
+already in — a US store read in USD and inches correctly does nothing, which
+tests very little.
+
+There is no ground truth for "the right conversion" on a stranger's website, so
+it checks invariants that must hold whatever the page contains:
+
+1. a chip's **length** conversion is exactly right (lengths need no rates);
+2. a chip's **price** is within 20% of the bundled rate — enough to catch a
+   wrong currency or a factor of 100, not a stale rate;
+3. no chip inside an `<input>`, `<textarea>`, `contenteditable`, or `<svg>`;
+4. the original value is left intact inside its marker;
+5. chips don't multiply on a second look, and don't vanish unexplained — a
+   chart being found legitimately strips the chips inside it;
+6. the extension logged no errors;
+7. where a size-guide control exists, the Open Chart button exists.
+
+Both scanners exit non-zero when anything fails, so either can gate a commit.
+They walk other people's shops: concurrency is capped at six, the User-Agent
+says what it is, and a scan is not an excuse to hammer anyone.
+
+### Still open, from the last scan
+
+3sixteen's chart produced 182 correct chips but was **not** recognised as a
+chart, so it got chips instead of the panel. The reader is finding the values
+and rejecting the grid; the browser scan will say when that's fixed.
 
 ## Known edges
 

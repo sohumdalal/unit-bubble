@@ -27,15 +27,27 @@
   /* ---------- cells ---------- */
 
   // A chart cell is a number, optionally fractional, optionally carrying its
-  // own unit: "47cm", "25 1/2", "23", '22 3/4"'.
-  const CELL = new RegExp(
-    '^[\\s\\u00a0]*(\\d+[\\s\\u00a0]+\\d+\\s*/\\s*\\d+|\\d+\\s*/\\s*\\d+|\\d+(?:[.,]\\d+)?)' +
-      '[\\s\\u00a0]*(cm|mm|m|in|inch|inches|"|”|″|ft|feet|foot|\'|’|′)?[\\s\\u00a0]*$',
-    'i'
-  );
+  // own unit: "47cm", "25 1/2", "17¼", "23", '22 3/4"'.
+  //
+  // Built on first use rather than at load, so this file does not depend on
+  // detect.js having been loaded before it — the page-boot suite caught that
+  // the hard way.
+  let CELL = null;
+
+  function cellRe() {
+    if (CELL) return CELL;
+    CELL = new RegExp(
+      '^[\\s\\u00a0]*(' +
+        `\\d+[\\s\\u00a0]*${UB.detect.VULGAR_CLASS}|${UB.detect.VULGAR_CLASS}|` +
+        '\\d+[\\s\\u00a0]+\\d+\\s*/\\s*\\d+|\\d+\\s*/\\s*\\d+|\\d+(?:[.,]\\d+)?)' +
+        '[\\s\\u00a0]*(cm|mm|m|in|inch|inches|"|”|″|ft|feet|foot|\'|’|′)?[\\s\\u00a0]*$',
+      'i'
+    );
+    return CELL;
+  }
 
   function parseCell(text) {
-    const m = String(text).match(CELL);
+    const m = String(text).match(cellRe());
     if (!m) return null;
     const value = UB.detect.parseNumber(m[1]);
     if (value == null || value <= 0 || value > 100000) return null;
@@ -356,6 +368,5 @@
     pickSize,
     clean,
     orderedShare,
-    CELL,
   };
 })(typeof self !== 'undefined' ? self : globalThis);

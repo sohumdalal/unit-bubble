@@ -12,7 +12,9 @@
     :host { all: initial; }
     .wrap {
       position: fixed; z-index: 2147483647;
-      left: 50%; top: 50%; width: 412px; max-width: calc(100vw - 28px);
+      left: 50%; top: 50%;
+      width: max-content; min-width: 320px; max-width: min(94vw, 860px);
+      max-height: 94vh; display: flex; flex-direction: column;
       box-sizing: border-box; border-radius: 18px; overflow: hidden;
       font: 400 13px/1.45 ${FONT};
       color: #101013; background: #fdfdfe;
@@ -47,8 +49,10 @@
       font: 400 15px/1 ${FONT};
     }
     .x:hover { background: rgba(0,0,0,.06); color: #101013; }
-    .body { max-height: min(60vh, 560px); overflow: auto; padding: 2px 10px 10px; }
+    .body { overflow: auto; padding: 2px 10px 10px; }
+    header, .foot { flex: 0 0 auto; }
     table { border-collapse: collapse; width: 100%; }
+    th, td { white-space: nowrap; }
     th, td { padding: 9px 10px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
     th {
       position: sticky; top: 0; z-index: 1;
@@ -132,7 +136,16 @@
   function layerParent() {
     const anchor = state && state.chart && state.chart.el;
     const dialog = anchor && anchor.closest && anchor.closest('dialog[open]');
-    return dialog || document.body || document.documentElement;
+    let modal = false;
+    try {
+      modal = !!dialog && dialog.matches(':modal');
+    } catch {
+      modal = !!dialog;
+    }
+    // Mounting inside the store's modal is a last resort: if it is torn down,
+    // our host goes with it. Only a truly modal <dialog> forces it, because it
+    // makes everything outside itself inert.
+    return (modal && dialog) || document.body || document.documentElement;
   }
 
   function ensureHost() {
@@ -180,11 +193,17 @@
   }
 
   const IMPERIAL = new Set(['in', 'ft', 'ftin']);
-  const other = (unit) => (IMPERIAL.has(unit) ? 'cm' : 'in');
+  // The unit the chart is not already in: the other half of the toggle.
+  const altUnit = (chart) => (chart.sourceUnit === 'in' ? 'cm' : 'in');
 
-  function cellText(item, unit) {
+  function cellText(item, unit, sourceUnit) {
     if (!item) return '—';
-    if (unit === 'orig') return item.text.replace(/\s+/g, ' ');
+    if (unit === 'orig') {
+      const text = item.text.replace(/\s+/g, ' ');
+      // A chart of bare numbers states its unit once, elsewhere; the panel has
+      // to say it per cell or the column is meaningless on its own.
+      return /[a-z"”″'′]/i.test(text) ? text : `${text} ${sourceUnit === 'in' ? 'in' : 'cm'}`;
+    }
     const mm = item.mm;
     if (unit === 'in') {
       const inches = mm / 25.4;
@@ -211,10 +230,10 @@
     const head = document.createElement('header');
     head.innerHTML = `
       <i class="dot"></i>
-      <h2>Size chart <small>in ${unit === 'orig' ? (chart.sourceUnit === 'in' ? 'inches' : 'centimeters') : unit === 'in' ? 'inches' : 'centimeters'}</small></h2>
+      <h2>Size chart <small>in ${(unit === 'orig' ? chart.sourceUnit : unit) === 'in' ? 'inches' : 'centimeters'}</small></h2>
       <div class="seg">
         <button data-u="orig" aria-pressed="${unit === 'orig'}">${chart.sourceUnit}</button>
-        <button data-u="${chart.targetUnit}" aria-pressed="${unit !== 'orig'}">${chart.targetUnit === 'in' ? 'in' : 'cm'}</button>
+        <button data-u="${altUnit(chart)}" aria-pressed="${unit !== 'orig'}">${altUnit(chart)}</button>
       </div>
       <button class="x" title="Hide">✕</button>`;
 
@@ -233,7 +252,7 @@
               const hit = chart.pick && chart.pick.row === r && chart.pick.col === c ? ' class="hit"' : '';
               const role = chart.roles && chart.roles[c];
               const cmp = item && role && chart.values && chart.values[role] ? ` data-role="${role}" data-mm="${item.mm}"` : '';
-              return `<td${hit}${cmp}>${escape(cellText(item, unit))}</td>`;
+              return `<td${hit}${cmp}>${escape(cellText(item, unit, chart.sourceUnit))}</td>`;
             })
             .join('')}</tr>`;
         })
@@ -295,12 +314,14 @@
       const diff = Number(td.dataset.mm) - mine;
       const v = UB.fit.verdict(role, diff);
       const shown = unit === 'orig' ? chart.sourceUnit : unit;
+      const yours = shown === 'in' ? `${UB.format.num(mine / 25.4, 1)}″` : `${UB.format.num(mine / 10, 1)} cm`;
+      const same = UB.fit.isSameSize(diff, shown);
       showTip(
         td,
-        `<b>${UB.fit.formatDiff(diff, shown)}</b><span>vs your ${
-          shown === 'in' ? `${UB.format.num(mine / 25.4, 2)}″` : `${UB.format.num(mine / 10, 1)} cm`
-        }</span>${v ? `<i>${v.text}</i>` : ''}`,
-        v && v.tone
+        `<b>${UB.fit.formatDiff(diff, shown)}</b><span>${same ? `same as your ${yours}` : `vs your ${yours}`}</span>${
+          v ? `<i>${same ? 'spot on' : v.text}</i>` : ''
+        }`,
+        same ? 'good' : v && v.tone
       );
     });
     table.addEventListener('mouseout', (e) => {
@@ -383,7 +404,7 @@
     const same = state && state.chart.key === chart.key;
     state = {
       chart,
-      unit: same ? state.unit : chart.targetUnit,
+      unit: same ? state.unit : chart.targetUnit === chart.sourceUnit ? 'orig' : chart.targetUnit,
       pos: same ? state.pos : null,
     };
     bindEsc();
@@ -417,5 +438,26 @@
     }
   }
 
-  UB.panel = { show, hide, isShowing: () => !!state, current: () => state && state.chart.key };
+  // Called on every detection pass. The panel's content is plain data, so an
+  // open panel should survive the store re-rendering, its modal closing, or a
+  // trip to another tab — all of which can detach or close our host.
+  function keepAlive() {
+    if (!state) return;
+    if (!host || !host.isConnected) {
+      host = null;
+      shadow = null;
+      tip = null;
+      render();
+      return;
+    }
+    if (host.hasAttribute('popover') && typeof host.showPopover === 'function') {
+      try {
+        if (!host.matches(':popover-open')) host.showPopover();
+      } catch {
+        /* still in the DOM with a max z-index */
+      }
+    }
+  }
+
+  UB.panel = { show, hide, keepAlive, isShowing: () => !!state, current: () => state && state.chart.key };
 })(typeof self !== 'undefined' ? self : globalThis);

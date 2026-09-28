@@ -55,6 +55,26 @@ const COMPOUND = [
 ];
 for (const [text, want] of COMPOUND) check(`compound ${text}`, mm(text), Math.round(want * 1000) / 1000);
 
+/* 3b. Vulgar fractions — how US charts are actually written --------------- */
+// Found by scanning 3sixteen, which writes 17¼ and 28⅞ rather than 17 1/4.
+for (const [text, want] of [
+  ['16½ in', 16.5 * 25.4],
+  ['17¼ in', 17.25 * 25.4],
+  ['28⅞ in', 28.875 * 25.4],
+  ['33¾ in', 33.75 * 25.4],
+  ['22½"', 22.5 * 25.4],
+  ['17 ¼ in', 17.25 * 25.4],
+  ['15⅛ in', 15.125 * 25.4],
+  ['29⅝ in', 29.625 * 25.4],
+  ['⅞ in', 0.875 * 25.4],
+  ['20⅓ cm', (20 + 1 / 3) * 10],
+]) {
+  check(`vulgar fraction ${text}`, mm(text), Math.round(want * 1000) / 1000);
+}
+check('bare vulgar fraction is not a length', mm('17¼'), null);
+check('parseNumber reads a vulgar fraction', UB.detect.parseNumber('17¼'), 17.25);
+check('parseNumber reads a lone one', UB.detect.parseNumber('½'), 0.5);
+
 /* 4. Exact output for every magnitude the formatter switches on ---------- */
 const TO_INCHES = [
   ['8 mm', '0.31 in'],

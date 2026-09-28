@@ -26,6 +26,12 @@ check('cell three quarters', UB.chart.parseCell('22 3/4').value, 22.75);
 check('cell bare fraction', UB.chart.parseCell('1/2').value, 0.5);
 check('cell fraction with unit', UB.chart.parseCell('21 1/2 in').mm, 546.1);
 check('cell comma decimal', UB.chart.parseCell('63,5 cm').mm, 635);
+check('cell vulgar half', UB.chart.parseCell('17½').value, 17.5);
+check('cell vulgar quarter', UB.chart.parseCell('17¼').value, 17.25);
+check('cell vulgar eighth', UB.chart.parseCell('28⅞').value, 28.875);
+check('cell vulgar spaced', UB.chart.parseCell('33 ¾').value, 33.75);
+check('cell vulgar with unit', UB.chart.parseCell('22½ in').mm, 22.5 * 25.4);
+check('cell lone vulgar', UB.chart.parseCell('½').value, 0.5);
 check('cell rejects words', UB.chart.parseCell('CHEST'), null);
 check('cell rejects mixed text', UB.chart.parseCell('47cm chest'), null);
 check('cell rejects zero', UB.chart.parseCell('0'), null);
@@ -160,6 +166,15 @@ check('unknown role has no verdict', UB.fit.verdict('elbow', 0), null);
 check('diff formats in inches', UB.fit.formatDiff(2 * 25.4, 'in'), '+2″');
 check('diff formats in cm', UB.fit.formatDiff(-15, 'cm'), '−1.5 cm');
 check('zero diff', UB.fit.formatDiff(0, 'in'), '±0″');
+// 1mm apart: both values print as the same number of inches, so claiming
+// "+0.04″" reads as an arithmetic bug rather than a rounding difference.
+check('sub-precision diff in inches', UB.fit.formatDiff(1, 'in'), '±0″');
+check('sub-precision diff in cm', UB.fit.formatDiff(0.4, 'cm'), '±0 cm');
+check('1mm counts as the same size', UB.fit.isSameSize(1, 'in'), true);
+check('half an inch does not', UB.fit.isSameSize(12.7, 'in'), false);
+check('4mm is the same in cm', UB.fit.isSameSize(0.4, 'cm'), true);
+check('6mm is not', UB.fit.isSameSize(6, 'cm'), false);
+check('a tenth of an inch still shows', UB.fit.formatDiff(2.54, 'in'), '+0.1″');
 
 /* 9. Size-guide trigger text --------------------------------------------- */
 for (const text of [

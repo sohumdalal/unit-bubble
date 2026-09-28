@@ -89,11 +89,22 @@
     return null;
   }
 
-  // "+1.6″" / "−0.4 cm" — the sign is the point, so it is always shown.
+  // "+1.6″" / "−0.4 cm" — the sign is the point, so it is always shown. The
+  // precision matches what the cells themselves print: showing "+0.04″" next to
+  // two values that both read 22.4″ looks like an arithmetic bug, when it is
+  // really a 1mm difference below the display precision.
   function formatDiff(diffMm, unit) {
-    const sign = diffMm > 0 ? '+' : diffMm < 0 ? '−' : '±';
     const abs = Math.abs(diffMm);
-    return unit === 'in' ? `${sign}${UB.format.num(abs / 25.4, 2)}″` : `${sign}${UB.format.num(abs / 10, 1)} cm`;
+    const shown = unit === 'in' ? UB.format.num(abs / 25.4, 1) : UB.format.num(abs / 10, 1);
+    if (Number(shown.replace(/[^\d.]/g, '')) === 0) return unit === 'in' ? '±0″' : '±0 cm';
+    const sign = diffMm > 0 ? '+' : '−';
+    return unit === 'in' ? `${sign}${shown}″` : `${sign}${shown} cm`;
+  }
+
+  // True when the difference is smaller than the chart's own precision, so the
+  // panel can say "same as yours" instead of implying a measurable gap.
+  function isSameSize(diffMm, unit) {
+    return Math.abs(diffMm) < (unit === 'in' ? 25.4 / 20 : 0.5);
   }
 
   // Which profile a chart belongs to. Chart headers are the strongest signal —
@@ -124,5 +135,5 @@
     return Object.keys(valuesFor(settings, profileId)).length > 0;
   }
 
-  UB.fit = { FIELDS, PROFILES, profile, verdict, formatDiff, detectProfile, valuesFor, hasAny };
+  UB.fit = { FIELDS, PROFILES, profile, verdict, formatDiff, isSameSize, detectProfile, valuesFor, hasAny };
 })(typeof self !== 'undefined' ? self : globalThis);

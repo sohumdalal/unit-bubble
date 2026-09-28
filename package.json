@@ -6,6 +6,12 @@
   "scripts": {
     "test": "node test/detect.test.js && node test/units.test.js && node test/currencies.test.js && node test/sizechart.test.js && node test/pages.test.js",
     "icons": "node tools/make-icons.js",
-    "zip": "rm -f unit-bubble.zip && zip -qr unit-bubble.zip manifest.json src icons -x '*.DS_Store'"
+    "zip": "rm -f unit-bubble.zip && zip -qr unit-bubble.zip manifest.json src icons -x '*.DS_Store'",
+    "scan:discover": "node tools/scan/discover.js",
+    "scan": "node tools/scan/corpus.js",
+    "scan:browser": "node tools/scan/browser.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
   }
 }
