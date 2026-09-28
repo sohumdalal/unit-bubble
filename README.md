@@ -167,6 +167,9 @@ test/units.test.js      238 assertions: every unit spelling, every magnitude
 test/currencies.test.js 545 assertions: every code, symbol and locale format
 test/sizechart.test.js  72 assertions: grid reconstruction from browser rects,
                         orientation, unit inference, fit verdicts
+test/pages.test.js      40 assertions: both pages booted against a DOM stub —
+                        ids resolve, handlers survive being called, manifest
+                        names files that exist
 test/fixtures.html      real-world strings plus three differently-built charts
 tools/make-icons.js    regenerates icons/*.png
 ```
