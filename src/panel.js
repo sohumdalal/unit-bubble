@@ -11,7 +11,7 @@
   const CSS = `
     :host { all: initial; }
     .wrap {
-      position: fixed; z-index: 2147483646;
+      position: fixed; z-index: 2147483647;
       left: 50%; top: 50%; width: 412px; max-width: calc(100vw - 28px);
       box-sizing: border-box; border-radius: 18px; overflow: hidden;
       font: 400 13px/1.45 ${FONT};
@@ -70,7 +70,7 @@
     .foot a { color: ${BLUE}; text-decoration: none; }
     .foot a:hover { text-decoration: underline; }
     .pill {
-      position: fixed; z-index: 2147483646; right: 24px; bottom: 24px;
+      position: fixed; z-index: 2147483647; right: 24px; bottom: 24px;
       display: flex; align-items: center; gap: 8px; padding: 10px 15px; border-radius: 999px;
       cursor: pointer; font: 500 12.5px/1 ${FONT};
       color: #fff; background: ${BLUE}; border: 0;
@@ -130,16 +130,47 @@
   let shadow = null;
   let state = null; // { chart, unit, pos, collapsed }
 
+  // Getting in front of a store's own size-guide modal takes three things, and
+  // which one matters depends on how the store built it:
+  //   1. the maximum z-index, for a modal that just bids high;
+  //   2. being last in DOM order, which breaks ties at equal z-index;
+  //   3. the top layer, which beats z-index entirely — via the popover API, or
+  //      by living inside the <dialog> when the store used a native modal one
+  //      (whose descendants are also the only things not made inert by it).
+  function layerParent() {
+    const anchor = state && state.chart && state.chart.el;
+    const dialog = anchor && anchor.closest && anchor.closest('dialog[open]');
+    return dialog || document.body || document.documentElement;
+  }
+
   function ensureHost() {
-    if (host && host.isConnected) return;
-    host = document.createElement('div');
-    host.setAttribute('data-ub-root', '');
-    host.style.cssText = 'all:initial;position:static';
-    shadow = host.attachShadow({ mode: 'closed' });
-    const style = document.createElement('style');
-    style.textContent = CSS;
-    shadow.append(style);
-    (document.body || document.documentElement).appendChild(host);
+    if (!host || !host.isConnected) {
+      host = document.createElement('div');
+      host.setAttribute('data-ub-root', '');
+      // A zero-size, non-painting anchor: everything visible is the fixed
+      // .wrap inside the shadow root.
+      host.style.cssText =
+        'all:unset;position:fixed;top:0;left:0;width:0;height:0;margin:0;padding:0;' +
+        'border:0;background:none;overflow:visible;z-index:2147483647';
+      shadow = host.attachShadow({ mode: 'closed' });
+      const style = document.createElement('style');
+      style.textContent = CSS;
+      shadow.append(style);
+    }
+
+    const parent = layerParent();
+    // Re-append even when the parent is unchanged: a store that injects nodes
+    // after us would otherwise win the equal-z-index tie on DOM order.
+    if (host.parentNode !== parent || host.nextSibling) parent.appendChild(host);
+
+    if (typeof host.showPopover === 'function') {
+      if (!host.hasAttribute('popover')) host.setAttribute('popover', 'manual');
+      try {
+        host.showPopover();
+      } catch {
+        /* already open, or the parent won't allow it: z-index still applies */
+      }
+    }
   }
 
   function clear() {
@@ -379,6 +410,13 @@
   function hide() {
     state = null;
     clear();
+    if (host && typeof host.hidePopover === 'function' && host.hasAttribute('popover')) {
+      try {
+        host.hidePopover();
+      } catch {
+        /* wasn't open */
+      }
+    }
   }
 
   UB.panel = { show, hide, isShowing: () => !!state, current: () => state && state.chart.key };

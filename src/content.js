@@ -387,6 +387,7 @@
       if (sourceImperial === (settings.length === 'in')) continue;
 
       const chart = {
+        el: cand.el,
         key: `${grid.cells.length}x${grid.cells[0].length}:${grid.cells[0]
           .map((c) => c && Math.round(c.mm))
           .join(',')}`,

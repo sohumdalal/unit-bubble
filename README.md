@@ -100,7 +100,15 @@ flips visibility. So detection is re-armed by visibility (an
 not by mutation alone.
 
 The panel opens centred in the viewport, because a size chart is the thing you
-went looking for — a corner is where you put something you might want later. It
+went looking for — a corner is where you put something you might want later.
+
+Getting in front of a store's own size-guide modal takes three things, and which
+one matters depends on how that store built it: the maximum z-index, for a modal
+that simply bids high; being last in DOM order, which breaks ties at equal
+z-index against markup injected after us; and the top layer, which beats z-index
+outright — entered through the popover API, or by living inside the `<dialog>`
+when the store used a native modal one, whose descendants are also the only
+things it doesn't make inert. All three are applied. It
 is draggable by its header (which pins it where you drop it), `Esc` or the ✕
 collapses it to a pill, and the unit toggle flips the whole chart at once. It
 hides itself when the chart scrolls out of view or the store's modal closes.
