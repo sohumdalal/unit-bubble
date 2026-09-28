@@ -69,21 +69,13 @@
     }
     .foot a { color: ${BLUE}; text-decoration: none; }
     .foot a:hover { text-decoration: underline; }
-    .pill {
-      position: fixed; z-index: 2147483647; right: 24px; bottom: 24px;
-      display: flex; align-items: center; gap: 8px; padding: 10px 15px; border-radius: 999px;
-      cursor: pointer; font: 500 12.5px/1 ${FONT};
-      color: #fff; background: ${BLUE}; border: 0;
-      box-shadow: 0 2px 8px rgba(0,0,0,.14), 0 12px 30px -10px rgba(0,60,140,.5);
-    }
-    .pill .dot { background: rgba(255,255,255,.9); }
     @media (prefers-color-scheme: dark) {
       .wrap { background: #1c1c1e; color: #f5f5f7; border-color: rgba(255,255,255,.13); }
       header, .foot { border-color: rgba(255,255,255,.1); }
       h2 small { color: rgba(245,245,247,.45); }
       th { background: #1c1c1e; color: rgba(245,245,247,.45); border-color: rgba(255,255,255,.12); }
       td { border-color: rgba(255,255,255,.07); }
-      .dot, .seg button[aria-pressed="true"], .pill { background: ${BLUE_DARK}; }
+      .dot, .seg button[aria-pressed="true"] { background: ${BLUE_DARK}; }
       .seg { background: rgba(255,255,255,.1); }
       .seg button { color: rgba(245,245,247,.55); }
       .x { color: rgba(245,245,247,.45); }
@@ -128,7 +120,7 @@
 
   let host = null;
   let shadow = null;
-  let state = null; // { chart, unit, pos, collapsed }
+  let state = null; // { chart, unit, pos }
 
   // Getting in front of a store's own size-guide modal takes three things, and
   // which one matters depends on how the store built it:
@@ -273,10 +265,7 @@
         render();
       };
     });
-    head.querySelector('.x').onclick = () => {
-      state.collapsed = true;
-      render();
-    };
+    head.querySelector('.x').onclick = () => hide();
     const settingsLink = foot.querySelector('[data-act=settings]');
     if (settingsLink) {
       settingsLink.onclick = (e) => {
@@ -290,18 +279,6 @@
     };
     wireTips(body, table);
     makeDraggable(wrap, head);
-
-    if (state.collapsed) {
-      clear();
-      const pill = document.createElement('button');
-      pill.className = 'pill';
-      pill.innerHTML = `<i class="dot"></i> Size chart in ${chart.targetUnit === 'in' ? 'inches' : 'centimeters'}`;
-      pill.onclick = () => {
-        state.collapsed = false;
-        render();
-      };
-      shadow.append(pill);
-    }
   }
 
   // Hovering a cell answers the question the chart doesn't: how far off your own
@@ -395,9 +372,8 @@
     window.addEventListener(
       'keydown',
       (e) => {
-        if (e.key !== 'Escape' || !state || state.collapsed) return;
-        state.collapsed = true;
-        render();
+        if (e.key !== 'Escape' || !state) return;
+        hide();
       },
       true
     );
@@ -409,7 +385,6 @@
       chart,
       unit: same ? state.unit : chart.targetUnit,
       pos: same ? state.pos : null,
-      collapsed: same ? state.collapsed : chart.autoOpen === false,
     };
     bindEsc();
     render();

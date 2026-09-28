@@ -111,7 +111,9 @@ when the store used a native modal one, whose descendants are also the only
 things it doesn't make inert. All three are applied.
 
 It is draggable by its header (which pins it where you drop it), `Esc` or the ✕
-collapses it to a pill, and the unit toggle flips the whole chart at once.
+dismisses it, and the unit toggle flips the whole chart at once. Dismissing
+closes it outright rather than leaving a pill behind: the Open Chart button is
+already the way back in, and two entry points at once is one too many.
 
 Opening is driven by the chart coming into view; closing is not. The panel stays
 until you dismiss it, because a store collapsing its own size guide shouldn't

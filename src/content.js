@@ -404,7 +404,6 @@
         targetUnit: settings.length,
         labelHeader: 'Size',
         unitInferred: unitless,
-        autoOpen: true, // if it is being shown at all, show it open
       };
       // Which measurements this chart is compared against. Inferred from the
       // chart's own columns and the page's words, switchable in the panel.
