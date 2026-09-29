@@ -2,23 +2,21 @@
 
 Status of a Chrome Web Store release, honestly.
 
-## Blocking
+## Blocking — all of it yours, none of it code
 
-- **Store listing assets.** A 128px icon exists; the listing also needs
-  screenshots (1280×800 or 640×400), a short description under 132 characters,
-  and a category. None exist yet.
-- **A privacy policy URL.** The store requires one for any extension with host
-  permissions, even when nothing is collected. The content is short — no
-  analytics, no accounts, nothing leaves the browser except an exchange-rate
-  request to `open.er-api.com` carrying no user data — but it has to be hosted
-  and linked.
-- **A permissions justification.** `<all_urls>` is a broad host permission and
-  gets a slower review. The justification is that a shopper cannot know in
-  advance which store they will open, and the extension reads page text only to
-  convert it. `storage`, `alarms` and `activeTab` are routine.
-- **The single-purpose statement.** "Convert prices and measurements on any
-  page into the units you read in." Worth stating plainly, since the size-chart
-  panel could otherwise look like a second feature.
+1. **Register as a Chrome Web Store developer** — a one-off $5 fee.
+2. **Create the item** and upload `unit-bubble.zip` (`npm run zip`).
+3. **Paste the listing** from [`../store/listing.md`](../store/listing.md):
+   name, short and long description, category, the five permission
+   justifications, the single-purpose statement, and the privacy policy URL.
+   The data-usage disclosures are all "nothing collected".
+4. **Upload the five screenshots** from `../store/screenshots`, with the
+   captions in that file.
+5. **Publish as Unlisted** — installable by link, still reviewed, not
+   searchable. A rough edge then isn't a public first impression.
+
+Written and packaged already: the policy (`PRIVACY.md`, which GitHub hosts at a
+URL the store accepts), all the copy, and the screenshots.
 
 ## Not blocking, but decide before shipping
 

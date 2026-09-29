@@ -16,7 +16,9 @@ untouched.
 
 ## Install
 
-Not on the Chrome Web Store yet — see [docs/release.md](docs/release.md).
+Not on the Chrome Web Store yet — the listing is written and packaged in
+[`store/`](store/listing.md); see [docs/release.md](docs/release.md) for what's
+left.
 
 ```bash
 git clone https://github.com/sohumdalal/unit-bubble
@@ -108,3 +110,4 @@ node tools/scan/perf.js --local        # scripting cost, against the mock stores
 | `test/e2e/` | mock stores and the suite that drives them |
 | `tools/scan/` | scanners for real sites |
 | `docs/internals.md` | how the chart reader works, and every bug worth remembering |
+| `store/` | listing copy and screenshots (`npm run shots`) |

@@ -1,17 +1,18 @@
 {
   "name": "unit-bubble",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Chrome extension: hover a price or measurement, see it in your units.",
   "scripts": {
     "test": "node test/detect.test.js && node test/units.test.js && node test/currencies.test.js && node test/sizechart.test.js && node test/pages.test.js",
     "icons": "node tools/make-icons.js",
-    "zip": "rm -f unit-bubble.zip && zip -qr unit-bubble.zip manifest.json src icons -x '*.DS_Store'",
+    "zip": "rm -f unit-bubble.zip && zip -qr unit-bubble.zip manifest.json src icons PRIVACY.md -x '*.DS_Store'",
     "scan:discover": "node tools/scan/discover.js",
     "scan": "node tools/scan/corpus.js",
     "scan:browser": "node tools/scan/browser.js",
     "e2e": "node test/e2e/run.js",
-    "check": "npm test && npm run e2e"
+    "check": "npm test && npm run e2e",
+    "shots": "node tools/listing/screenshots.js"
   },
   "devDependencies": {
     "playwright": "^1.49.0"

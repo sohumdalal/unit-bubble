@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Unit Bubble",
-  "version": "0.2.0",
-  "description": "Hover any price or measurement on any page and a small bubble shows it in your units.",
+  "version": "1.0.0",
+  "description": "Converts prices and measurements on any store into the units you read in, and rebuilds size charts.",
   "permissions": ["storage", "alarms", "activeTab"],
   "host_permissions": ["https://open.er-api.com/*"],
   "background": { "service_worker": "src/background.js" },
